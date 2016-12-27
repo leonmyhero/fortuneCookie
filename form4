@@ -1,0 +1,127 @@
+Option Compare Database
+
+Private Sub btn_getRatio_Click()
+    
+    Dim matchdate As String, country As String, tournament As String
+    
+    If Me.txt_matchdate = "" Or IsNull(Me.txt_matchdate) Then
+        matchdate = ""
+    Else
+        matchdate = Me.txt_matchdate
+    End If
+    
+    If Me.com_country = "" Or IsNull(Me.com_country) Then
+        country = ""
+    Else
+        country = Me.com_country
+    End If
+    
+    If Me.com_tournament = "" Or IsNull(Me.com_tournament) Then
+        tournament = ""
+    Else
+        tournament = Me.com_tournament
+    End If
+    
+    Call getSpecificRatio(matchdate, country, tournament)
+    
+End Sub
+
+Private Sub btn_odds_Click()
+
+    Dim matchdate As String, country As String, tournament As String
+    
+    If Me.txt_matchdate = "" Or IsNull(Me.txt_matchdate) Then
+        matchdate = ""
+    Else
+        matchdate = Me.txt_matchdate
+    End If
+    
+    If Me.com_country = "" Or IsNull(Me.com_country) Then
+        country = ""
+    Else
+        country = Me.com_country
+    End If
+    
+    If Me.com_tournament = "" Or IsNull(Me.com_tournament) Then
+        tournament = ""
+    Else
+        tournament = Me.com_tournament
+    End If
+    
+    Call getSpecificOdds(matchdate, country, tournament)
+
+End Sub
+
+Private Sub com_country_AfterUpdate()
+    
+    Me.com_tournament.Requery
+    
+End Sub
+
+Private Sub Command1_Click()
+    'Call matchtournametsearch(Me.txt_date)
+    Dim obrowser As WebBrowser
+    Dim ht As HTMLDocument
+    Dim url As String
+    Dim selectdate As Date
+    Dim yy As String
+    Dim mm As String
+    Dim dd As String
+    
+    
+    selectdate = Format(Me.txt_date, "yyyy-mm-dd")
+    
+    yy = CStr(Year(selectdate))
+    mm = IIf(Month(selectdate) < 10, "0" & Month(selectdate), CStr(Month(selectdate)))
+    
+    dd = IIf(Day(selectdate) < 10, "0" & Day(selectdate), CStr(Day(selectdate)))
+    
+    
+    url = "http://www.livescores.com/soccer/" & yy & "-" & mm & "-" & dd & "/"
+    Debug.Print url
+    
+    Set obrowser = Me.WebBrowser0.Object
+    
+    obrowser.Navigate url
+    
+    'Debug.Print Me.txt_date
+    
+End Sub
+
+Private Sub Command5_Click()
+    Call getLiveScoreUrl(Me.txt_date)
+End Sub
+
+Private Sub Command6_Click()
+
+    Dim obrowser As WebBrowser
+    Dim ht As HTMLDocument
+    Dim url As String
+    Dim selectdate As Date
+    Dim yy As String
+    Dim mm As String
+    Dim dd As String
+    
+    
+    selectdate = Format(Me.txt_date, "yyyy-mm-dd")
+    
+    yy = CStr(Year(selectdate))
+    mm = IIf(Month(selectdate) < 10, "0" & Month(selectdate), CStr(Month(selectdate)))
+    
+    dd = IIf(Day(selectdate) < 10, "0" & Day(selectdate), CStr(Day(selectdate)))
+    
+    
+    url = "http://www.livescores.com/basketball/" & yy & "-" & mm & "-" & dd & "/"
+    Debug.Print url
+    
+    Set obrowser = Me.WebBrowser0.Object
+    
+    obrowser.Navigate url
+    
+End Sub
+
+Private Sub Command7_Click()
+
+    Call getLiveScoreBAData(Me.txt_date)
+    
+End Sub
