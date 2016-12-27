@@ -1,0 +1,608 @@
+Option Compare Database
+
+Option Explicit
+
+Type events
+    country As String
+    tournament As String
+    result As String
+    eventid As String
+    EventLink As String
+    hteam As String
+    ateam As String
+End Type
+
+Type tournament
+    country As String
+    tournament As String
+    offset As Integer
+End Type
+
+
+Sub CatchBasketballmatch(matchdate As Date)
+
+    Dim weeks As String
+    Dim days As String
+    Dim years As String
+    Dim dURL As String
+    Dim sURL As String
+    Dim rs As Recordset
+    Dim HTML As HTMLDocument
+    Dim tHTML As New HTMLDocument
+    Dim elem As Object
+    Dim fixtureid As String
+    Dim inplayurl As String
+    Dim fixture As String
+    Dim x As Integer
+    Dim fixturelist() As fixtures
+    Dim y As Integer
+    Dim ht As String
+    Dim at As String
+    Dim eventtime As String
+    Dim eventtype As String
+    Dim hscore As String
+    Dim ascore As String
+    Dim matchstr As Variant
+    
+    weeks = Format(matchdate, "mm")
+    If Len(weeks) < 2 Then
+      weeks = "0" & weeks
+    End If
+    days = Format(matchdate, "d")
+    years = Format(matchdate, "yyyy")
+
+    dURL = "http://otv-internalreports/inplaystats/InPlayStats.asp?Classification=18"
+
+
+    sURL = dURL & "&SelectedDate=" & days & "%2F" & weeks & "%2F" & years
+    'Debug.Print sURL
+        
+    Set HTML = tHTML.createDocumentFromUrl(sURL, vbNullString)
+    Do While HTML.ReadyState <> "complete": DoEvents: Loop
+    
+    'Debug.Print HTML.body.innerText
+    'For Each elem In HTML.getElementById("Results")
+        'Debug.Print HTML.getElementById("Results").innerHTML
+    'Next
+    x = 0
+    Set rs = CurrentDb.OpenRecordset("select * from tableBAT")
+    
+    For Each elem In HTML.getElementById("Results").getElementsByTagName("td")
+        If InStr(1, elem.innerHTML, "src = ", vbTextCompare) > 0 Then
+            
+            fixtureid = Mid(elem.innerHTML, InStr(1, elem.innerHTML, "src = ", vbTextCompare) + 7, 30)
+            'Debug.Print fixtureid
+            fixtureid = Left(fixtureid, InStr(1, fixtureid, "'", vbTextCompare) - 1)
+            inplayurl = "http://otv-internalreports/inplaystats/" & fixtureid
+            fixtureid = Mid(fixtureid, InStr(1, fixtureid, "=", vbTextCompare) + 1, 20)
+            fixture = elem.innerText
+            'Debug.Print fixture, inplayurl
+            If IsNull(DLookup("matchid", "tableBAT", "matchid = '" & fixtureid & "'")) Then
+                ReDim Preserve fixturelist(0 To x)
+                fixturelist(x).fixturename = fixture
+                fixturelist(x).fixtureurl = inplayurl
+                fixturelist(x).fixtureid = fixtureid
+                With rs
+                    .AddNew
+                    ![matchdate] = matchdate
+                    ![matchDatestr] = matchdate
+                    ![MatchName] = fixture
+                    ![matchid] = fixtureid
+                    .Update
+                End With
+                x = x + 1
+            End If
+        End If
+    Next
+    
+    rs.Close
+    Set rs = Nothing
+    
+    HTML.Close
+    Set HTML = Nothing
+    
+    tHTML.Close
+    Set tHTML = Nothing
+    
+    Set rs = CurrentDb.OpenRecordset("select * from TableBAS")
+    
+    If x <> 0 Then 'goto next level
+        For y = 0 To UBound(fixturelist)
+            
+            Set HTML = tHTML.createDocumentFromUrl(fixturelist(y).fixtureurl, vbNullString)
+            Do While HTML.ReadyState <> "complete": DoEvents: Loop
+            
+            For Each elem In HTML.getElementById("Results").getElementsByTagName("td")
+                matchstr = ""
+                matchstr = Split(elem.innerText, " ", , vbTextCompare)
+                Debug.Print UBound(matchstr)
+                If UBound(matchstr) = 8 Then 'found event
+                    eventtype = matchstr(5) & " " & matchstr(6)
+                    hscore = Left(matchstr(7), InStr(1, matchstr(7), "-", vbTextCompare) - 1)
+                    ascore = Mid(matchstr(7), InStr(1, matchstr(7), "-", vbTextCompare) + 1, 5)
+                    With rs
+                        .AddNew
+                        ![matchid] = fixturelist(y).fixtureid
+                        ![matchtime] = eventtype
+                        ![hscore] = hscore
+                        ![ascore] = ascore
+                        .Update
+                    End With
+                End If
+    
+            Next
+            
+    
+        Next
+    End If
+    
+End Sub
+
+Sub matchtournametsearch(matchdate As String)
+
+    Dim rs As Recordset
+    Dim eventname As String
+    Dim country As String
+    Dim tournament As String
+    Dim obrowser As WebBrowser
+    Dim ht As HTMLDocument
+    Dim elem As Object
+    Dim em As Object
+    Dim homet As String
+    Dim awayt As String
+    
+    Set rs = CurrentDb.OpenRecordset("select * from table5 where matchdateStr = '" & matchdate & "'")
+    Set obrowser = Form_Form4.WebBrowser0.Object
+    Set ht = obrowser.Document
+    
+    Do While Not rs.EOF
+        'Debug.Print rs.Fields("matchname").Value
+        homet = Left(rs.Fields("matchname").Value, InStr(1, rs.Fields("matchname").Value, " v ", vbTextCompare) - 1)
+        awayt = Mid(rs.Fields("matchname").Value, InStr(1, rs.Fields("matchname").Value, " v ", vbTextCompare) + 3, 20)
+        Debug.Print homet, awayt
+        For Each elem In ht.getElementsByClassName("even stage-finished")
+            If InStr(1, elem.innerText, homet, vbTextCompare) > 0 And InStr(1, elem.innerText, awayt, vbTextCompare) > 0 Then
+                Set em = elem.parentElement.parentElement
+                country = em.getElementsByClassName("country_part")(0).innerText
+                tournament = em.getElementsByClassName("tournament_part")(0).innerText
+                Debug.Print country, tournament
+                With rs
+                    .Edit
+                    ![country] = country
+                    ![tournament] = tournament
+                    .Update
+                End With
+                'Exit For
+            End If
+        Next
+        rs.MoveNext
+    Loop
+
+    rs.Close
+    Set rs = Nothing
+    
+End Sub
+
+Sub testflashscore()
+
+    Dim obrowser As WebBrowser
+    Dim ht As HTMLDocument
+    Dim em As Object
+    Dim elem As Object
+    
+    Set obrowser = Form_Form4.WebBrowser0.Object
+    Set ht = obrowser.Document
+    
+    For Each em In ht.getElementsByClassName("even stage-finished")
+        Set elem = em.parentElement.parentElement
+        Debug.Print elem.getElementsByClassName("country_part")(0).innerText
+    Next
+End Sub
+
+Sub getflashscore()
+
+    Dim HTML As HTMLDocument
+    Dim tHTML As New HTMLDocument
+    Dim url As String
+    
+    url = "http://www.livescores.com/soccer/england/premier-league/watford-vs-everton/1-2252331/"
+    Set HTML = tHTML.createDocumentFromUrl(url, vbNullString)
+    Do While HTML.ReadyState <> "complete": DoEvents: Loop
+    Debug.Print HTML.body.innerText
+    
+    'Debug.Print HTML.getElementsByClassName("current-result")(0).innerText
+    
+    HTML.Close
+    tHTML.Close
+    Set HTML = Nothing
+    Set tHTML = Nothing
+    
+End Sub
+
+Sub getLiveScoreUrl(eventdate As Date)
+    
+    Dim obrowser As WebBrowser
+    Dim ht As HTMLDocument
+    Dim em As Object
+    Dim elem As Object
+    Dim fixtures() As events
+    Dim x As Integer
+    Dim country As String
+    Dim tournament As String
+    Dim ta() As tournament
+    Dim eventid As String
+    Dim hteam As String
+    Dim ateam As String
+    Dim url As String
+    Dim result As String
+    Dim i As Integer
+    Dim y As Integer
+    Dim rs As Recordset
+    
+    Set obrowser = Form_Form4.WebBrowser0.Object
+    Set ht = obrowser.Document
+    
+    x = 0
+    For Each elem In ht.getElementsByClassName("row-tall")
+        If Not elem.getElementsByTagName("a")(0) Is Nothing Then
+            ReDim Preserve ta(0 To x)
+            country = elem.getElementsByTagName("a")(0).innerText
+            tournament = elem.getElementsByTagName("a")(1).innerText
+            If InStr(1, tournament, "::", vbTextCompare) > 0 Then
+                tournament = Left(elem.getElementsByTagName("a")(1).innerText, InStr(1, tournament, "::", vbTextCompare) - 1)
+            End If
+            'Debug.Print elem.offsetTop
+            ta(x).country = country
+            ta(x).tournament = tournament
+            ta(x).offset = elem.offsetTop
+            x = x + 1
+            'Debug.Print country, tournament
+        End If
+    Next
+    
+    ReDim Preserve ta(0 To x)
+    ta(x).offset = 20000
+    
+    y = 0
+    For Each elem In ht.getElementsByClassName("row-gray")
+        If Not elem.getElementsByTagName("a")(0) Is Nothing Then
+            ReDim Preserve fixtures(0 To y)
+            i = InStr(1, elem.outerHTML, "data-eid=", vbTextCompare)
+            eventid = Mid(elem.outerHTML, i + 10, 40)
+            i = InStr(1, eventid, "data-pid", vbTextCompare)
+            eventid = Left(eventid, i - 3)
+            hteam = elem.getElementsByTagName("div")(1).innerText
+            ateam = elem.getElementsByTagName("div")(3).innerText
+            result = elem.getElementsByTagName("div")(2).innerText
+            url = elem.getElementsByTagName("a")(0).href
+            fixtures(y).ateam = ateam
+            fixtures(y).hteam = hteam
+            fixtures(y).result = result
+            fixtures(y).eventid = eventid
+            fixtures(y).EventLink = url
+            For x = 0 To UBound(ta) - 1
+                If elem.offsetTop > ta(x).offset And elem.offsetTop < ta(x + 1).offset Then
+                    fixtures(y).country = ta(x).country
+                    fixtures(y).tournament = ta(x).tournament
+                    Exit For
+                End If
+            Next
+            y = y + 1
+        End If
+    Next
+    
+    Set rs = CurrentDb.OpenRecordset("select * from tablelivescore where eventdatestr = '" & eventdate & "'")
+    For x = 0 To UBound(fixtures)
+        If IsNull(DLookup("eventid", "tablelivescore", "eventid = '" & fixtures(x).eventid & "'")) Then
+            With rs
+                .AddNew
+                ![eventdate] = eventdate
+                ![eventdatestr] = eventdate
+                ![eventname] = fixtures(x).hteam & " v " & fixtures(x).hteam
+                ![eventcountry] = fixtures(x).country
+                ![EventTournament] = fixtures(x).tournament
+                ![eventid] = fixtures(x).eventid
+                ![hteam] = fixtures(x).hteam
+                ![ateam] = fixtures(x).ateam
+                ![EventLink] = fixtures(x).EventLink
+                ![result] = fixtures(x).result
+                .Update
+            End With
+        End If
+    Next
+    
+    rs.Close
+    Set rs = Nothing
+    ht.Close
+    Set ht = Nothing
+    Set em = Nothing
+    Set elem = Nothing
+    Set obrowser = Nothing
+    
+    Dim HTML As HTMLDocument
+    Dim tHTML As New HTMLDocument
+    Dim eventstr As String
+    Dim eventtime As Integer
+    Dim eventtype As String
+    
+    Set rs = CurrentDb.OpenRecordset("select * from tableLiveScoreResult")
+    For x = 0 To UBound(fixtures)
+        Set HTML = tHTML.createDocumentFromUrl(fixtures(x).EventLink, vbNullString)
+        Do While HTML.ReadyState <> "complete": DoEvents: Loop
+        Debug.Print fixtures(x).EventLink
+        For Each em In HTML.getElementsByClassName("min")
+            If InStr(1, em.innerText, "'", vbTextCompare) > 0 Then
+                eventstr = em.innerText
+                eventtime = CInt(Left(eventstr, InStr(1, eventstr, "'", vbTextCompare) - 1))
+                eventtype = ""
+                eventstr = em.parentElement.innerHTML
+                If InStr(1, eventstr, "inc goal", vbTextCompare) > 0 Then
+                    eventtype = "Goal"
+                ElseIf InStr(1, eventstr, "inc yellowcard", vbTextCompare) > 0 Then
+                    eventtype = "Yellow"
+                ElseIf InStr(1, eventstr, "inc redcard", vbTextCompare) > 0 Then
+                    eventtype = "Red"
+                ElseIf InStr(1, eventstr, "inc redyellowcard", vbTextCompare) > 0 Then
+                    eventtype = "RedYellow"
+                End If
+                If eventtype <> "" Then
+                        With rs
+                            .AddNew
+                            ![matchid] = fixtures(x).eventid
+                            ![eventtime] = eventtime
+                            ![event] = eventtype
+                            .Update
+                        End With
+                End If
+            End If
+        Next
+        HTML.Close
+        Set HTML = Nothing
+        tHTML.Close
+        Set tHTML = Nothing
+    Next
+    
+    rs.Close
+    Set rs = Nothing
+    
+End Sub
+
+Sub getLiveScoreDetail()
+
+    Dim HTML As HTMLDocument
+    Dim tHTML As New HTMLDocument
+    Dim eventstr As String
+    Dim eventtime As Integer
+    Dim eventtype As String
+    Dim rs As Recordset
+    Dim x As Integer
+    Dim url As String
+    Dim em As Object
+    
+    url = "http://www.livescores.com/soccer/argentina/national-b/juventud-unida-gualeguaychu-vs-chacarita-juniors/1-2365052/"
+        Set HTML = tHTML.createDocumentFromUrl(url, vbNullString)
+        Do While HTML.ReadyState <> "complete": DoEvents: Loop
+        'Debug.Print HTML.body.innerHTML
+        For Each em In HTML.getElementsByClassName("min")
+            If InStr(1, em.innerText, "'", vbTextCompare) > 0 Then
+                eventstr = em.innerText
+                eventtime = CInt(Left(eventstr, InStr(1, eventstr, "'", vbTextCompare) - 1))
+                
+                eventtype = ""
+                eventstr = em.parentElement.innerHTML
+
+                If InStr(1, eventstr, "inc goal", vbTextCompare) > 0 Then
+                    eventtype = "Goal"
+                ElseIf InStr(1, eventstr, "inc yellowcard", vbTextCompare) > 0 Then
+                    eventtype = "Yellow"
+                ElseIf InStr(1, eventstr, "inc redcard", vbTextCompare) > 0 Then
+                    eventtype = "Red"
+                ElseIf InStr(1, eventstr, "inc redyellowcard", vbTextCompare) > 0 Then
+                    eventtype = "RedYellow"
+                End If
+                Debug.Print eventtime, eventtype
+
+            End If
+        Next
+    
+    
+End Sub
+
+Sub getLiveScoreBAData(matchdate As Date)
+    
+    Dim obrowser As WebBrowser
+    Dim ht As HTMLDocument
+    Dim elem As HTMLDDElement
+    Dim em As HTMLDDElement
+    Dim fixtures() As events
+    Dim x As Integer
+    Dim country As String
+    Dim tournament As String
+    Dim ta() As tournament
+    Dim eventid As String
+    Dim hteam As String
+    Dim ateam As String
+    Dim url As String
+    Dim result As String
+    Dim i As Integer
+    Dim y As Integer
+    Dim rs As Recordset
+    Dim hscore As String
+    Dim ascore As String
+    Dim rst As Recordset
+    Dim matchtime As String
+    Dim ca As String
+    Dim ms As Integer
+    Dim en As HTMLDDElement
+    Dim content As HTMLDDElement
+    
+    Set obrowser = Form_Form4.WebBrowser0.Object
+    Set ht = obrowser.Document
+    
+    x = 0
+    For Each elem In ht.getElementsByClassName("row-tall")
+        If Not elem.getElementsByTagName("a")(0) Is Nothing Then
+            ReDim Preserve ta(0 To x)
+            country = elem.getElementsByTagName("a")(0).innerText
+            tournament = elem.getElementsByTagName("a")(1).innerText
+            If InStr(1, tournament, "::", vbTextCompare) > 0 Then
+                tournament = Left(elem.getElementsByTagName("a")(1).innerText, InStr(1, tournament, "::", vbTextCompare) - 1)
+            End If
+            'Debug.Print elem.offsetTop
+            ta(x).country = country
+            ta(x).tournament = tournament
+            ta(x).offset = elem.offsetTop
+            x = x + 1
+            'Debug.Print country, tournament
+        End If
+    Next
+    
+    ReDim Preserve ta(0 To x)
+    ta(x).offset = 20000
+    
+    y = 0
+    Set content = ht.getElementsByClassName("content")(0)
+    
+    For Each elem In content.getElementsByClassName("clear")
+        'Debug.Print elem.innerHTML
+        'Debug.Print elem.getElementsByTagName("div")(0).innerText
+        
+        If Not elem.getElementsByClassName("min-short")(0) Is Nothing Then
+        If elem.getElementsByClassName("min-short")(0).innerText = "FT " Or elem.getElementsByClassName("min-short")(0).innerText = "OT " Then
+            i = InStr(1, elem.outerHTML, "data-eid=", vbTextCompare) 'event ID
+            eventid = Mid(elem.outerHTML, i + 10, 40)
+            'Debug.Print eventid
+            i = InStr(1, eventid, "data-pid", vbTextCompare)
+            eventid = Left(eventid, i - 3)
+            
+            If IsNull(DLookup("MatchID", "tablelivescoreBAT", "MatchID = '" & eventid & "'")) Then
+            
+                Set rs = CurrentDb.OpenRecordset("select * from tablelivescoreBAT where MatchdateStr = '" & matchdate & "'")
+                Set rst = CurrentDb.OpenRecordset("select * from tablelivescoreBAS")
+                
+                ReDim Preserve fixtures(0 To y)
+                matchtime = elem.getElementsByClassName("min-short")(0).innerText
+                
+                Set em = elem.getElementsByClassName("row-gray")(0) 'home team
+                Set en = elem.getElementsByClassName("row-gray")(1) 'away team
+                
+                hteam = em.getElementsByClassName("bas-ply")(0).innerText
+                hscore = em.getElementsByClassName("col-2")(0).innerText
+                
+                ateam = en.getElementsByClassName("bas-ply")(0).innerText
+                ascore = en.getElementsByClassName("col-2")(0).innerText
+                
+                For x = 0 To UBound(ta) - 1
+                    If elem.offsetTop > ta(x).offset And elem.offsetTop < ta(x + 1).offset Then
+                        country = ta(x).country
+                        tournament = ta(x).tournament
+                        Exit For
+                    End If
+                Next
+                
+                With rs
+                    .AddNew
+                    ![matchdate] = matchdate
+                    ![matchDatestr] = matchdate
+                    ![MatchName] = hteam & " v " & ateam
+                    ![matchid] = eventid
+                    ![hteam] = hteam
+                    ![ateam] = ateam
+                    ![FT/OT] = matchtime
+                    ![country] = country
+                    ![tournament] = tournament
+                    ![hscore] = hscore
+                    ![ascore] = ascore
+                    .Update
+                End With
+                
+                
+                If IsNull(em.getElementsByClassName("col-2")(3).innerText) Or em.getElementsByClassName("col-2")(3).innerText = "" Then 'half time result
+                    Debug.Print em.getElementsByClassName("col-2")(1).innerText
+                    If em.getElementsByClassName("col-2")(1).innerText <> "" Then
+                        With rst
+                            .AddNew
+                            ![matchid] = eventid
+                            ![matchtime] = "1st Half"
+                            ![hscore] = em.getElementsByClassName("col-2")(1).innerText
+                            ![ascore] = en.getElementsByClassName("col-2")(1).innerText
+                            .Update
+                        End With
+                        With rst
+                            .AddNew
+                            ![matchid] = eventid
+                            ![matchtime] = "2nd Half"
+                            ![hscore] = em.getElementsByClassName("col-2")(2).innerText
+                            ![ascore] = en.getElementsByClassName("col-2")(2).innerText
+                            .Update
+                        End With
+                        If matchtime = "OT " Then
+                            With rst
+                                .AddNew
+                                ![matchid] = eventid
+                                ![matchtime] = "Over Time"
+                                ![hscore] = em.getElementsByClassName("col-2")(5).innerText
+                                ![ascore] = en.getElementsByClassName("col-2")(5).innerText
+                                .Update
+                            End With
+                        End If
+                    End If
+                Else 'quarter time result
+                    Debug.Print em.getElementsByClassName("col-2")(1).innerText
+                    If em.getElementsByClassName("col-2")(1).innerText <> "" Then
+                        With rst
+                            .AddNew
+                            ![matchid] = eventid
+                            ![matchtime] = "1st Quarter"
+                            ![hscore] = em.getElementsByClassName("col-2")(1).innerText
+                            ![ascore] = en.getElementsByClassName("col-2")(1).innerText
+                            .Update
+                        End With
+                        With rst
+                            .AddNew
+                            ![matchid] = eventid
+                            ![matchtime] = "2nd Quarter"
+                            ![hscore] = em.getElementsByClassName("col-2")(2).innerText
+                            ![ascore] = en.getElementsByClassName("col-2")(2).innerText
+                            .Update
+                        End With
+                        With rst
+                            .AddNew
+                            ![matchid] = eventid
+                            ![matchtime] = "3rd Quarter"
+                            ![hscore] = em.getElementsByClassName("col-2")(3).innerText
+                            ![ascore] = en.getElementsByClassName("col-2")(3).innerText
+                            .Update
+                        End With
+                        With rst
+                            .AddNew
+                            ![matchid] = eventid
+                            ![matchtime] = "4th Quarter"
+                            ![hscore] = em.getElementsByClassName("col-2")(4).innerText
+                            ![ascore] = en.getElementsByClassName("col-2")(4).innerText
+                            .Update
+                        End With
+                        If matchtime = "OT " Then
+                            With rst
+                                .AddNew
+                                ![matchid] = eventid
+                                ![matchtime] = "Over Time"
+                                ![hscore] = em.getElementsByClassName("col-2")(5).innerText
+                                ![ascore] = en.getElementsByClassName("col-2")(5).innerText
+                                .Update
+                            End With
+                        End If
+                    End If
+                End If
+
+            End If
+        End If
+        End If
+    Next
+    
+    rst.Close
+    Set rst = Nothing
+    rs.Close
+    Set rs = Nothing
+
+End Sub
