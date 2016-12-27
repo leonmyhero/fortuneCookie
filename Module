@@ -1,0 +1,439 @@
+Option Compare Database
+Type playerlink
+player As String
+url As String
+End Type
+Sub fetchPage()
+Dim obrowser As WebBrowser
+Dim oHTML As HTMLDocument
+Dim sURL As String
+Dim link As Object
+Dim tHTML As New HTMLDocument
+sURL = ""
+Set obrowser = Form_fmMain.webbrowser_loginhistory.Object
+sURL = "http://www.futwiz.com/en/fifa16/players"
+Set oHTML = obrowser.Document
+Do While obrowser.ReadyState <> READYSTATE_COMPLETE: DoEvents: Loop
+For Each link In oHTML.getElementsByTagName("div")
+  If link.className = "pull-right" Then
+    sURL = link.getElementsByTagName("a")(0)
+  End If
+Next
+Debug.Print sURL
+
+If sURL <> "" Then
+  'Set oBrowser = Form_fmMain.WebBrowser0.Object
+  'oBrowser.Navigate sURL
+  
+  Set oHTML = tHTML.createDocumentFromUrl(sURL, vbNullString)
+  Do While oHTML.ReadyState <> "complete": DoEvents: Loop
+  'Debug.Print oHTML.body.innerText
+  'Do While oBrowser.ReadyState <> READYSTATE_COMPLETE: DoEvents: Loop
+  Exit Sub
+End If
+
+End Sub
+
+Sub fetchFifaPlayers()
+
+Dim obrowser As WebBrowser
+Dim oHTML As HTMLDocument
+Dim sURL As String
+Dim x As Integer
+Dim rs As Recordset
+Dim link As Object
+Dim target As Object
+Dim playerurls() As playerlink
+Dim playerStr As String
+
+Set obrowser = Form_fmMain.webbrowser_loginhistory.Object
+
+sURL = "http://www.futwiz.com/en/fifa16/players"
+Do While obrowser.ReadyState <> READYSTATE_COMPLETE: DoEvents: Loop
+
+Set oHTML = obrowser.Document
+x = 0
+For Each link In oHTML.getElementsByTagName("td")
+  If link.className = "text-left" Then
+    ReDim Preserve playerurls(0 To x)
+    Set target = link
+    playerurls(x).url = target.getElementsByTagName("a")(0)
+    Call ExtraPlayer(playerurls(x).url, playerStr)
+    playerurls(x).player = playerStr
+    x = x + 1
+  End If
+Next
+
+For x = 0 To UBound(playerurls)
+  Debug.Print playerurls(x).player & playerurls(x).url
+Next
+
+End Sub
+Sub fetchAllPlayersURL()
+
+Dim obrowser As WebBrowser
+Dim oHTML As HTMLDocument
+Dim sURL As String
+Dim x As Integer
+Dim rs As Recordset
+Dim link As Object
+Dim target As Object
+Dim playerurls() As playerlink
+Dim playerStr As String
+Dim i As Integer
+Dim tHTML As New HTMLDocument
+Dim url As String
+
+Set rs = CurrentDb.OpenRecordset("select * from tbURLs")
+For i = 1 To 5
+  sURL = "http://www.futwiz.com/en/fifa16/players?page=" & i
+  Set oHTML = tHTML.createDocumentFromUrl(sURL, vbNullString)
+  Do While oHTML.ReadyState <> "complete": DoEvents: Loop
+
+
+  For Each link In oHTML.getElementsByTagName("td")
+    If link.className = "text-left" Then
+      Set target = link
+      url = target.getElementsByTagName("a")(0)
+      Call ExtraPlayer(url, playerStr)
+      With rs
+        .AddNew
+        !Fields("URL") = url
+        !Fields("Player") = playerStr
+        .Update
+      End With
+    End If
+  Next
+
+Next
+
+End Sub
+Sub ExtraPlayer(urlStr As String, playerName As String)
+    Dim objRegex As Object
+    Dim objRegM As Object
+    Set objRegex = CreateObject("vbscript.regexp")
+    With objRegex
+        .ignorecase = True
+        .Pattern = "/en/fifa16/player/([\S\s]+)/"
+        If .test(urlStr) Then
+            Set objRegM = .Execute(urlStr)
+              playerName = Trim(objRegM(0).submatches(0))
+        Else
+            playerName = ""
+        End If
+    End With
+  Set objRegM = Nothing
+  Set objRegex = Nothing
+End Sub
+Sub loadallhistory()
+
+    Dim acc As String
+    Dim usernames As Variant
+    Dim x As Integer
+    Dim username As String
+    Dim logintime As String
+    Dim logouttime As String
+    Dim loginlocation As String
+    Dim historyfound As Boolean
+    Dim rowStr As String
+    Dim rs As Recordset
+    Dim user() As String
+    Dim y As Integer
+    
+    'On Error Resume Next
+    
+    acc = GetTextFromClipboard
+    'Debug.Print acc
+    
+    If IsNull(acc) Or acc = "" Then
+      Exit Sub
+    End If
+    
+    usernames = Split(acc, Chr(10), , vbTextCompare)
+    
+    y = 0
+    For x = 0 To UBound(usernames)
+        If Replace(usernames(x), Chr(13), "") <> "" Then
+            ReDim Preserve user(0 To y)
+            user(y) = Replace(usernames(x), Chr(13), "")
+            y = y + 1
+        End If
+    Next
+    
+    Call removeduplicateusername(user())
+    
+    Set rs = CurrentDb.OpenRecordset("select * from table2")
+    For x = 0 To UBound(user)
+        Call getloginhistory(user(x), logintime, logouttime, loginlocation, historyfound)
+        Debug.Print user(x), logintime, logouttime, loginlocation
+        'If historyfound Then
+            With rs
+                .AddNew
+                ![field1] = user(x)
+                If historyfound Then
+                    ![Field2] = CDate(logintime)
+                End If
+                ![field3] = logouttime
+                ![field4] = loginlocation
+                .Update
+            End With
+            
+            'rowStr = rowStr & """" & username & """" & ";" _
+            '& """" & logintime & """" & ";" _
+            '& """" & logouttime & """" & ";" _
+            '& """" & loginlocation & """" & ";"
+        'End If
+    Next
+    
+    rs.Close
+    Set rs = Nothing
+    
+    'Form_fmMain.List1.RowSource = rowStr
+    Form_fmMain.Table2_subform.Requery
+    
+    
+End Sub
+
+Sub getloginhistory(username As String, logintime As String, logouttime As String, loginlocation As String, historyfound As Boolean)
+    'On Error Resume Next
+    Dim obrowser As WebBrowser
+    Dim HTML As HTMLDocument
+    Dim dURL As String
+    Dim target As Object
+    Dim loginstring As String
+    Dim rs As Recordset
+    Dim elem As Object
+    'Debug.Print Username
+    Dim em As Object
+    Dim rowStr As String
+    
+    On Error GoTo errhandler:
+    
+    logintime = ""
+    logouttime = ""
+    loginlocation = ""
+    'DoCmd.Hourglass True
+    
+    'Debug.Print "username: " & Username
+    
+    dURL = "http://otv-ims-useragentinfo/"
+    Set obrowser = Form_fmMain.webbrowser_loginhistory.Object
+    rowStr = ""
+    'obrowser.Silent = True
+    'obrowser.Navigate dURL
+    'Debug.Print dURL
+    
+    Do While obrowser.ReadyState <> READYSTATE_COMPLETE: DoEvents: Loop
+    
+    Set HTML = obrowser.Document
+    Do While HTML.ReadyState <> "complete": DoEvents: Loop
+    'Debug.Print HTML.body.innerHTML
+    
+    HTML.getElementById("txtUsername").Value = username
+    HTML.getElementById("dteFrom_hidden").Value = "%3CDateChooser%20Value%3D%222016x1x1%22%3E%3C/DateChooser%3E"
+    HTML.getElementById("btnSearch").Click
+    
+    Do While obrowser.ReadyState <> READYSTATE_COMPLETE: DoEvents: Loop
+    Do While obrowser.ReadyState <> READYSTATE_COMPLETE: DoEvents: Debug.Print DoEvents: Loop
+    Set HTML = obrowser.Document
+    Do While HTML.ReadyState <> "complete": DoEvents: Loop
+    
+    loginstring = HTML.body.innerHTML
+    'Debug.Print loginstring
+    
+    'CurrentDb.Execute "delete * from tbLoginhistory"
+    historyfound = False
+    
+    'Debug.Print loginstring
+    If InStr(1, HTML.body.innerText, "No Data To Display", vbTextCompare) > 0 Then
+        historyfound = False
+        Exit Sub
+    End If
+    Set em = HTML.getElementsByClassName("UserAgentInfo-ic")(0)
+    logintime = em.getElementsByTagName("td")(0).innerText
+    logouttime = em.getElementsByTagName("td")(1).innerText
+    loginlocation = em.getElementsByTagName("td")(25).innerText
+    'Debug.Print loginstring
+    'Set rs = CurrentDb.OpenRecordset("select * from tbLoginhistory")
+    'For Each elem In HTML.getElementsByClassName("UserAgentInfo-ic")
+    '    Set target = elem
+        
+    '    rowStr = rowStr & """" & CDate(target.getElementsByTagName("td")(0).innerText) & """" & ";" _
+    '                & """" & Replace(target.getElementsByTagName("td")(6).innerText, "https://", "", , , vbTextCompare) & """" & ";" _
+    '                & """" & target.getElementsByTagName("td")(7).innerText & """" & ";" _
+    '                & """" & target.getElementsByTagName("td")(8).innerText & """" & ";" _
+    '                & """" & target.getElementsByTagName("td")(25).innerText & """" & ";" _
+    '                & """" & target.getElementsByTagName("td")(9).innerText & """" & ";" _
+    '                & """" & target.getElementsByTagName("td")(10).innerText & """" & ";" _
+    '                & """" & target.getElementsByTagName("td")(13).innerText & """" & ";" _
+    '                & """" & target.getElementsByTagName("td")(0).innerText & """" & ";"
+        
+
+        'Debug.Print target.getElementsByTagName("td")(0)
+        'With rs
+        '    .AddNew
+        '    ![logintime] = CDate(target.getElementsByTagName("td")(0).innerText)
+        '    ![domain] = Replace(target.getElementsByTagName("td")(6).innerText, "https://", "", , , vbTextCompare)
+        '    ![IPAddress] = target.getElementsByTagName("td")(7).innerText
+        '    ![ISP] = target.getElementsByTagName("td")(8).innerText
+        '    ![State] = target.getElementsByTagName("td")(25).innerText
+        '    ![City] = target.getElementsByTagName("td")(9).innerText
+        '    ![Browser] = target.getElementsByTagName("td")(10).innerText
+        '    ![os] = target.getElementsByTagName("td")(13).innerText
+        '    .Update
+        'End With
+    'Next
+    historyfound = True
+    
+    'Form_fmWebsite.lst_loginhistory.RowSource = rowStr
+    
+    'Set em = HTML.getElementsByClassName("UserAgentInfo-ic")(0)
+    
+    'Form_fmWebsite.txt_datetime = CDate(em.getElementsByTagName("td")(0).innerText)
+    'Form_fmWebsite.txt_domain = Replace(em.getElementsByTagName("td")(6).innerText, "https://", "", , , vbTextCompare)
+    'Form_fmWebsite.txt_ipaddress = em.getElementsByTagName("td")(7).innerText
+    'Form_fmWebsite.txt_ISP = em.getElementsByTagName("td")(8).innerText
+    'Form_fmWebsite.txt_province = em.getElementsByTagName("td")(25).innerText
+    'Form_fmWebsite.txt_city = em.getElementsByTagName("td")(9).innerText
+    'Form_fmWebsite.txt_browser = em.getElementsByTagName("td")(10).innerText
+    'Form_fmWebsite.txt_OS = em.getElementsByTagName("td")(13).innerText
+    'DoCmd.Hourglass False
+    Exit Sub
+    
+errhandler:
+    'MsgBox Err.description
+    'MsgBox "Connection error. Please try again."
+    'DoCmd.Hourglass False
+    Exit Sub
+    
+End Sub
+
+Public Function GetTextFromClipboard() As String
+    Dim objClipboard As Object
+    On Error Resume Next
+    Set objClipboard = CreateObject("new:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")
+    objClipboard.GetFromClipboard
+    GetTextFromClipboard = objClipboard.getText
+    Set objClipboard = Nothing
+End Function
+
+Sub runfunction()
+
+    Dim string1 As String
+    Dim x As Integer
+    Dim y As Integer
+    Dim rs As Recordset
+    Dim target As String
+    
+    target = "abcdefghijklmnopqrstuvwxyz"
+    target2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    
+    string1 = DLookup("field1", "table1", "id=23")
+    Set rs = CurrentDb.OpenRecordset("select * from table1")
+    Debug.Print Len(string1)
+    For x = 1 To Len(target2)
+        Debug.Print Mid(target2, x, 1), Asc(Mid(target2, x, 1))
+    '    With rs
+    '    .AddNew
+    '    !field1 = x
+    '    !Field2 = Mid(string1, (x + 1) * 15, 15)
+    '    .Update
+    '    End With
+    Next
+    
+    'rs.Close
+    'Set rs = Nothing
+    
+End Sub
+
+Function convertt(source As String) As String
+    
+    Dim so1 As String
+    Dim so2 As String
+    Dim ta As String
+    Dim x As Integer
+    Dim y As Integer
+    
+    so1 = DLookup("field1", "table1", "id=1")
+    so2 = DLookup("field1", "table1", "id=23")
+    
+    For x = 1 To Len(source)
+        If IsNumeric(Mid(source, x, 1)) Then
+            y = x + Asc(Mid(source, x, 1))
+            convertt = convertt & Mid(so1, y, 1)
+        Else
+            y = x + Asc(Mid(source, x, 1))
+            convertt = convertt & Mid(so2, y, 1)
+        End If
+    Next
+    
+End Function
+
+Function convertc(source As String) As String
+    
+    Dim so1 As String
+    Dim so2 As String
+    Dim ta As String
+    Dim x As Integer
+    Dim y As Integer
+    Dim i As Integer
+    Dim ca As String
+    
+    so1 = DLookup("field1", "table1", "id=1")
+    so2 = DLookup("field1", "table1", "id=23")
+    
+    For x = 1 To Len(source)
+        ca = Mid(source, x, 1)
+        If InStr(1, so1, ca, vbTextCompare) > 0 Then
+            y = InStr(1, so1, ca, vbTextCompare)
+            i = y - x
+            convertc = convertc & Chr(i)
+        ElseIf InStr(1, so2, ca, vbTextCompare) > 0 Then
+            y = InStr(1, so2, ca, vbTextCompare)
+            i = y - x
+            convertc = convertc & Chr(i)
+        Else
+            convertc = convertc & ca
+        End If
+    Next
+    
+End Function
+
+Sub removeduplicateusername(ByRef initialarray() As String)
+
+    On Error Resume Next
+    
+    Dim newArray() As String
+    Dim i As Integer
+    Dim j As Integer
+    
+    For i = 0 To UBound(initialarray)
+    For j = 0 To UBound(initialarray)
+    If Not initialarray(i) = "" Then
+    If Not j = i Then
+    If initialarray(i) = initialarray(j) Then
+    initialarray(j) = ""
+    End If
+    End If
+    End If
+    Next
+    Next
+    
+    j = 0
+    For i = 0 To UBound(initialarray)
+    If Not initialarray(i) = "" Then
+    ReDim Preserve newArray(j)
+    newArray(j) = initialarray(i)
+    j = j + 1
+    End If
+    Next
+    
+    ReDim initialarray(0 To UBound(newArray)) As String
+    
+    For i = 0 To UBound(newArray)
+    initialarray(i) = newArray(i)
+    
+    Next
+
+End Sub
+
