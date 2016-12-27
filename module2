@@ -1,0 +1,1091 @@
+Option Compare Database
+
+Option Explicit
+
+Const jetFormat As String = "\#yyyy\-mm\-dd\#"
+Const jetFormat2 As String = "\yyyy\-mm\-dd\ hh:mm:ss"
+
+Type fixtures
+    fixturename As String
+    fixtureurl As String
+    fixtureid As String
+End Type
+
+Sub Catchmatch(matchdate As Date)
+
+    Dim weeks As String
+    Dim days As String
+    Dim years As String
+    Dim dURL As String
+    Dim sURL As String
+    Dim rs As Recordset
+    Dim HTML As HTMLDocument
+    Dim tHTML As New HTMLDocument
+    Dim elem As Object
+    Dim fixtureid As String
+    Dim inplayurl As String
+    Dim fixture As String
+    Dim x As Integer
+    Dim fixturelist() As fixtures
+    Dim y As Integer
+    Dim ht As String
+    Dim at As String
+    Dim eventtime As String
+    Dim eventtype As String
+    
+    weeks = Format(matchdate, "mm")
+    If Len(weeks) < 2 Then
+      weeks = "0" & weeks
+    End If
+    days = Format(matchdate, "d")
+    years = Format(matchdate, "yyyy")
+
+    dURL = "http://otv-internalreports/inplaystats/InPlayStats.asp?Classification=1"
+
+
+    sURL = dURL & "&SelectedDate=" & days & "%2F" & weeks & "%2F" & years
+    'Debug.Print sURL
+        
+    Set HTML = tHTML.createDocumentFromUrl(sURL, vbNullString)
+    Do While HTML.ReadyState <> "complete": DoEvents: Loop
+    
+    'Debug.Print HTML.body.innerText
+    'For Each elem In HTML.getElementById("Results")
+        'Debug.Print HTML.getElementById("Results").innerHTML
+    'Next
+    x = 0
+    Set rs = CurrentDb.OpenRecordset("select * from table5")
+    
+    For Each elem In HTML.getElementById("Results").getElementsByTagName("td")
+        If InStr(1, elem.innerHTML, "src = ", vbTextCompare) > 0 Then
+            
+            fixtureid = Mid(elem.innerHTML, InStr(1, elem.innerHTML, "src = ", vbTextCompare) + 7, 30)
+            'Debug.Print fixtureid
+            fixtureid = Left(fixtureid, InStr(1, fixtureid, "'", vbTextCompare) - 1)
+            inplayurl = "http://otv-internalreports/inplaystats/" & fixtureid
+            fixtureid = Mid(fixtureid, InStr(1, fixtureid, "=", vbTextCompare) + 1, 20)
+            fixture = elem.innerText
+            'Debug.Print fixture, inplayurl
+            If IsNull(DLookup("matchid", "table5", "matchid = '" & fixtureid & "'")) Then
+                ReDim Preserve fixturelist(0 To x)
+                fixturelist(x).fixturename = fixture
+                fixturelist(x).fixtureurl = inplayurl
+                fixturelist(x).fixtureid = fixtureid
+                With rs
+                    .AddNew
+                    ![matchdate] = matchdate
+                    ![matchDatestr] = matchdate
+                    ![MatchName] = fixture
+                    ![matchid] = fixtureid
+                    .Update
+                End With
+                x = x + 1
+            End If
+        End If
+    Next
+    
+    rs.Close
+    Set rs = Nothing
+    
+    HTML.Close
+    Set HTML = Nothing
+    
+    tHTML.Close
+    Set tHTML = Nothing
+    
+    Set rs = CurrentDb.OpenRecordset("select * from Table4")
+    
+    If x <> 0 Then 'goto next level
+        For y = 0 To UBound(fixturelist)
+            
+            Set HTML = tHTML.createDocumentFromUrl(fixturelist(y).fixtureurl, vbNullString)
+            Do While HTML.ReadyState <> "complete": DoEvents: Loop
+            
+            For Each elem In HTML.getElementById("Results").getElementsByTagName("td")
+                eventtime = Left(elem.innerText, 6)
+                If InStr(1, eventtime, "'", vbTextCompare) > 0 Then 'event found
+                    eventtime = Left(eventtime, InStr(1, eventtime, "'", vbTextCompare) - 1)
+                    If InStr(1, eventtime, "+", vbTextCompare) > 0 Then
+                        eventtime = Left(eventtime, InStr(1, eventtime, "+", vbTextCompare) - 1)
+                    End If
+                    
+                    eventtype = ""
+                    If InStr(1, elem.innerText, " Goal ", vbTextCompare) > 0 Then
+                        eventtype = "Goal"
+                    End If
+                    If InStr(1, elem.innerText, " Corner ", vbTextCompare) > 0 Then
+                        eventtype = "Corner"
+                    End If
+                    If InStr(1, elem.innerText, " Yellow Card ", vbTextCompare) > 0 Then
+                        eventtype = "Yellow Card"
+                    End If
+                    If InStr(1, elem.innerText, " Red Card ", vbTextCompare) > 0 Then
+                        eventtype = "Red Card"
+                    End If
+                    Debug.Print eventtime
+                    
+                    If eventtype <> "" Then
+                        With rs
+                         .AddNew
+                         ![matchid] = fixturelist(y).fixtureid
+                         ![eventtime] = CInt(eventtime)
+                         ![event] = eventtype
+                         .Update
+                        End With
+                    End If
+                End If
+            Next
+            
+    
+        Next
+    End If
+    
+End Sub
+
+Sub testingfixture()
+Dim fixture As String
+Dim search1 As String
+Dim search2 As String
+Dim search As String
+Dim x As Integer
+
+fixture = "Qatar v China PR "
+If InStr(1, fixture, "v", vbTextCompare) > 0 Then
+  x = InStr(1, fixture, "v", vbTextCompare)
+  search1 = Left(fixture, x - 1)
+  search2 = Mid(fixture, x + 1)
+ElseIf InStr(1, fixture, "vs", vbTextCompare) > 0 Then
+  x = InStr(1, fixture, "v", vbTextCompare)
+  search1 = Left(fixture, x - 1)
+  search2 = Mid(fixture, x + 2)
+Else
+  search = fixture
+End If
+Debug.Print Trim(search1)
+Debug.Print Trim(search2)
+Debug.Print Trim(search)
+
+End Sub
+Sub getodds()
+
+    Dim rs As Recordset
+    Dim rst As Recordset
+    Dim x As Integer
+    Dim y As Integer
+    Dim result(0 To 20) As Long
+    Dim total As Long
+    Dim tm As String
+    Dim lm As String
+    Dim report As String
+    Dim per As Double
+    Dim sheetname As Integer
+    Dim ApXL As Object
+    Dim xlWBk As Object
+    Dim xlWSh As Object
+    Dim i As Integer
+    Dim odds As Double
+    'On Error Resume Next
+    
+    'total = DCount("matchid", "table5")
+    total = DCount("eventid", "tablelivescore")
+    
+    Set ApXL = CreateObject("Excel.Application")
+    With ApXL
+        .Visible = True
+        Set xlWBk = .Workbooks.Add
+    End With
+    Set xlWSh = xlWBk.Worksheets("sheet1")
+    
+    xlWSh.Range("a1") = total
+    
+    For x = 0 To 20
+        xlWSh.Range("a1").offset(0, x * 2 + 1).Value = "U" & (x + 0.5)
+        xlWSh.Range("a1").offset(0, x * 2 + 2).Value = "O" & (x + 0.5)
+    Next
+    
+    For i = 0 To 90
+        'Set rs = CurrentDb.OpenRecordset("select * from table4 where eventtime >= " & i & " and event = 'Goal'")
+        Set rs = CurrentDb.OpenRecordset("select * from tablelivescoreresult where eventtime >= " & i & " and event = 'Goal'")
+        For x = 0 To 20
+            result(x) = 0
+        Next
+        
+        x = 1
+        tm = ""
+        lm = ""
+
+        Do While Not rs.EOF
+            tm = rs.Fields("matchid").Value
+            If tm <> lm Then
+                x = 1
+                result(x) = result(x) + 1
+                lm = tm
+            Else
+                x = x + 1
+                result(x) = result(x) + 1
+            End If
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = Nothing
+        
+        'result(x) = result(x) + 1
+        
+        'Debug.Print total
+        
+            
+        result(0) = total - result(1)
+        
+        'For x = 1 To 19 'accmulate
+        '    For y = x + 1 To 20
+        '        result(x) = result(x) + result(y)
+        '    Next
+        'Next
+        'For x = 1 To 20
+        '    Debug.Print result(x)
+        'Next
+        'count odds
+        'For x = 0 To 20
+            
+        'Next
+        
+        xlWSh.Range("a" & (i + 2)) = i
+
+        
+        For x = 1 To 20 'count odds and fill in sheets
+            'Debug.Print result(x), result(x) / total, 1 - (result(x) / total)
+            Debug.Print result(x) / total
+            If result(x) / total = 0 Then
+                odds = 0
+            Else
+                odds = (1 - result(x) / total) / (result(x) / total)
+            End If
+            
+            xlWSh.Range("a" & (i + 2)).offset(0, (x - 1) * 2 + 1) = 1 + IIf(result(x) = 0, 0, (result(x) / total) / (1 - result(x) / total))
+            xlWSh.Range("a" & (i + 2)).offset(0, (x - 1) * 2 + 2) = 1 + odds
+            'xlWSh.Range("a" & (i + 2)).offset(0, x + 1) = result(x)
+        Next
+
+    Next
+
+    
+
+    Set ApXL = Nothing
+    Set xlWBk = Nothing
+    Set xlWSh = Nothing
+    
+End Sub
+
+Sub test()
+    Dim rs As Recordset
+    Debug.Print DCount("matchid", "tablelivescoreresult", "eventtime = 90 and event = 'Goal'")
+    
+End Sub
+Sub getfirsthalfodds()
+
+    Dim rs As Recordset
+    Dim rst As Recordset
+    Dim x As Integer
+    Dim y As Integer
+    Dim result(0 To 20) As Long
+    Dim total As Long
+    Dim tm As String
+    Dim lm As String
+    Dim report As String
+    Dim per As Double
+    Dim sheetname As Integer
+    Dim ApXL As Object
+    Dim xlWBk As Object
+    Dim xlWSh As Object
+    Dim i As Integer
+    Dim odds As Double
+    
+    'On Error Resume Next
+    
+    'total = DCount("matchid", "table5")
+    total = DCount("eventid", "tablelivescore")
+    
+    Set ApXL = CreateObject("Excel.Application")
+    With ApXL
+        .Visible = True
+        Set xlWBk = .Workbooks.Add
+    End With
+    Set xlWSh = xlWBk.Worksheets("sheet1")
+    
+    xlWSh.Range("a1") = total
+    
+    For x = 0 To 20
+        xlWSh.Range("a1").offset(0, x * 2 + 1).Value = "U" & (x + 0.5)
+        xlWSh.Range("a1").offset(0, x * 2 + 2).Value = "O" & (x + 0.5)
+    Next
+    
+    For i = 0 To 45
+        'Set rs = CurrentDb.OpenRecordset("select * from table4 where eventtime >= " & i & " and event = 'Goal' and eventtime < 46")
+        Set rs = CurrentDb.OpenRecordset("select * from tablelivescoreresult where eventtime >= " & i & " and event = 'Goal' and eventtime < 46")
+        For x = 0 To 20
+            result(x) = 0
+        Next
+        
+        x = 1
+        tm = ""
+        lm = ""
+        
+
+        
+        Do While Not rs.EOF
+            tm = rs.Fields("matchid").Value
+            If tm <> lm Then
+                result(x) = result(x) + 1
+                x = 1
+                lm = tm
+            Else
+                x = x + 1
+            End If
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = Nothing
+        
+        result(x) = result(x) + 1
+        
+        'Debug.Print total
+        report = ""
+        
+        For x = 1 To 20
+            result(0) = result(0) + result(x)
+        Next
+                
+        result(0) = total - result(0)
+        
+        For x = 1 To 19 'accmulate
+            For y = x + 1 To 20
+                result(x) = result(x) + result(y)
+            Next
+        Next
+        
+        'count odds
+        'For x = 0 To 20
+            
+        'Next
+        
+        xlWSh.Range("a" & (i + 2)) = i
+        'For x = 0 To 20
+            'per = Format(result(x) / total, "##.#%")
+        '    report = report & result(x) & "   "
+        'Next
+        'report = report & vbNewLine
+        
+        For x = 1 To 20 'count odds and fill in sheets
+            Debug.Print result(x), result(x) / total, 1 - (result(x) / total)
+            If result(x) / total = 0 Then
+                odds = 0
+            Else
+                odds = (1 - result(x) / total) / (result(x) / total)
+            End If
+            
+            xlWSh.Range("a" & (i + 2)).offset(0, (x - 1) * 2 + 1) = 1 + (result(x) / total) / (1 - result(x) / total)
+            xlWSh.Range("a" & (i + 2)).offset(0, (x - 1) * 2 + 2) = 1 + odds
+            'xlWSh.Range("a" & (i + 2)).offset(0, x + 1) = result(x)
+        Next
+    Next
+
+    
+
+    Set ApXL = Nothing
+    Set xlWBk = Nothing
+    Set xlWSh = Nothing
+    
+End Sub
+Sub getratio()
+
+    Dim rs As Recordset
+    Dim rst As Recordset
+    Dim x As Integer
+    Dim y As Integer
+    Dim result(0 To 20) As Long
+    Dim total As Long
+    Dim tm As String
+    Dim lm As String
+    Dim report As String
+    Dim per As Double
+    Dim sheetname As Integer
+    Dim ApXL As Object
+    Dim xlWBk As Object
+    Dim xlWSh As Object
+    Dim i As Integer
+    
+    'total = DCount("matchid", "table5")
+    total = DCount("eventid", "tablelivescore")
+
+    Set ApXL = CreateObject("Excel.Application")
+    With ApXL
+        .Visible = True
+        Set xlWBk = .Workbooks.Add
+    End With
+    Set xlWSh = xlWBk.Worksheets("sheet1")
+    xlWSh.Range("a1").Value = total
+    For x = 0 To 20
+        xlWSh.Range("a1").offset(0, x + 1).Value = x
+    Next
+    
+    For i = 0 To 90
+        'Set rs = CurrentDb.OpenRecordset("select * from table4 where eventtime >= " & i & " and event = 'Goal'")
+        Set rs = CurrentDb.OpenRecordset("select * from tablelivescoreresult where eventtime >= " & i & " and event = 'Goal'")
+        For x = 0 To 20
+            result(x) = 0
+        Next
+        
+        x = 1
+        tm = ""
+        lm = ""
+        
+
+        
+        Do While Not rs.EOF
+            tm = rs.Fields("matchid").Value
+            If tm <> lm Then
+                x = 1
+                result(x) = result(x) + 1
+                lm = tm
+            Else
+                x = x + 1
+                result(x) = result(x) + 1
+            End If
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = Nothing
+        
+        'result(x) = result(x) + 1
+        
+        'Debug.Print total
+        'report = ""
+        
+        'For x = 1 To 20
+        '    result(0) = result(0) + result(x)
+        'Next
+                
+        result(0) = total - result(1)
+        
+        'For x = 1 To 19 'accmulate
+        '    For y = x + 1 To 20
+        '        result(x) = result(x) + result(y)
+        '    Next
+        'Next
+        
+        xlWSh.Range("a" & (i + 2)) = i
+        'For x = 0 To 20
+            'per = Format(result(x) / total, "##.#%")
+        '    report = report & result(x) & "   "
+        'Next
+        'report = report & vbNewLine
+        
+        For x = 0 To 20
+            xlWSh.Range("a" & (i + 2)).offset(0, x + 1) = Format(result(x) / total, "##.#######%")
+            'xlWSh.Range("a" & (i + 2)).offset(0, x + 1) = result(x)
+        Next
+    Next
+
+    
+
+    Set ApXL = Nothing
+    Set xlWBk = Nothing
+    Set xlWSh = Nothing
+    
+End Sub
+
+Sub getSpecificRatio(matchdate As String, country As String, tournament As String)
+
+    Dim rs As Recordset
+    Dim rst As Recordset
+    Dim x As Integer
+    Dim y As Integer
+    Dim result(0 To 20) As Long
+    Dim total As Long
+    Dim tm As String
+    Dim lm As String
+    Dim report As String
+    Dim per As Double
+    Dim sheetname As Integer
+    Dim ApXL As Object
+    Dim xlWBk As Object
+    Dim xlWSh As Object
+    Dim i As Integer
+    Dim matchDatestr As String
+    Dim matchcountrystr As String
+    Dim matchtournamentstr As String
+    Dim condition As String
+    Dim totalcondition As String
+    Dim matchdate2 As String
+    Dim matchcountry2 As String
+    Dim matchtournament2 As String
+    
+    'total = DCount("matchid", "table5")
+    
+    If matchdate <> "" Then
+        matchDatestr = "TableLiveScore.EventDateStr = '" & matchdate & "'"
+        matchdate2 = "EventDateStr = '" & matchdate & "'"
+    Else
+        matchDatestr = ""
+        matchdate2 = ""
+    End If
+    
+    If country <> "" Then
+        matchcountrystr = "TableLiveScore.EventCountry = '" & country & "'"
+        matchcountry2 = "EventCountry = '" & country & "'"
+    Else
+        matchcountrystr = ""
+        matchcountry2 = ""
+    End If
+    
+    If tournament <> "" Then
+        matchtournamentstr = "TableLiveScore.EventTournament = '" & tournament & "'"
+        matchtournament2 = "EventTournament = '" & tournament & "'"
+    Else
+        matchtournamentstr = ""
+        matchtournament2 = ""
+    End If
+    
+    condition = ""
+    
+    If matchDatestr <> "" Then
+        condition = condition & " and " & matchDatestr
+        totalcondition = totalcondition & " and " & matchdate2
+    End If
+    
+    If matchcountrystr <> "" Then
+        condition = condition & " and " & matchcountrystr
+        totalcondition = totalcondition & " and " & matchcountry2
+    End If
+    
+    If matchtournamentstr <> "" Then
+        condition = condition & " and " & matchtournamentstr
+        totalcondition = totalcondition & " and " & matchtournament2
+    End If
+    
+    If Left(totalcondition, 4) = " and" Then
+        totalcondition = Mid(totalcondition, 6, 100)
+    End If
+    
+    Debug.Print totalcondition
+    
+    total = DCount("eventid", "tablelivescore", totalcondition)
+
+    Set ApXL = CreateObject("Excel.Application")
+    With ApXL
+        .Visible = True
+        Set xlWBk = .Workbooks.Add
+    End With
+    Set xlWSh = xlWBk.Worksheets("sheet1")
+    xlWSh.Range("a1").Value = total
+    For x = 0 To 20
+        xlWSh.Range("a1").offset(0, x + 1).Value = x
+    Next
+    
+    For i = 0 To 90
+        'Set rs = CurrentDb.OpenRecordset("select * from table4 where eventtime >= " & i & " and event = 'Goal'")
+        'Set rs = CurrentDb.OpenRecordset("select * from tablelivescoreresult where eventtime >= " & i & " and event = 'Goal'")
+        Set rs = CurrentDb.OpenRecordset("select * from TableLiveScoreResult INNER JOIN TableLiveScore ON TableLiveScore.EventID = TableLiveScoreResult.matchID WHERE TableLiveScoreResult.eventtime >= " & i & " and TableLiveScoreResult.event = 'Goal'" & condition)
+        
+        For x = 0 To 20
+            result(x) = 0
+        Next
+        
+        x = 1
+        tm = ""
+        lm = ""
+        
+
+        
+        Do While Not rs.EOF
+            tm = rs.Fields("matchid").Value
+            If tm <> lm Then
+                x = 1
+                result(x) = result(x) + 1
+                lm = tm
+            Else
+                x = x + 1
+                result(x) = result(x) + 1
+            End If
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = Nothing
+        
+        'result(x) = result(x) + 1
+        
+        'Debug.Print total
+        'report = ""
+        
+        'For x = 1 To 20
+        '    result(0) = result(0) + result(x)
+        'Next
+                
+        result(0) = total - result(1)
+        
+        'For x = 1 To 19 'accmulate
+        '    For y = x + 1 To 20
+        '        result(x) = result(x) + result(y)
+        '    Next
+        'Next
+        
+        xlWSh.Range("a" & (i + 2)) = i
+        'For x = 0 To 20
+            'per = Format(result(x) / total, "##.#%")
+        '    report = report & result(x) & "   "
+        'Next
+        'report = report & vbNewLine
+        
+        For x = 0 To 20
+            xlWSh.Range("a" & (i + 2)).offset(0, x + 1) = Format(result(x) / total, "##.#######%")
+            'xlWSh.Range("a" & (i + 2)).offset(0, x + 1) = result(x)
+        Next
+    Next
+
+    
+
+    Set ApXL = Nothing
+    Set xlWBk = Nothing
+    Set xlWSh = Nothing
+    
+End Sub
+
+Sub getSpecificOdds(matchdate As String, country As String, tournament As String)
+
+    Dim rs As Recordset
+    Dim rst As Recordset
+    Dim x As Integer
+    Dim y As Integer
+    Dim result(0 To 20) As Long
+    Dim total As Long
+    Dim tm As String
+    Dim lm As String
+    Dim report As String
+    Dim per As Double
+    Dim sheetname As Integer
+    Dim ApXL As Object
+    Dim xlWBk As Object
+    Dim xlWSh As Object
+    Dim i As Integer
+    Dim odds As Double
+    Dim matchDatestr As String
+    Dim matchcountrystr As String
+    Dim matchtournamentstr As String
+    Dim condition As String
+    Dim totalcondition As String
+    Dim matchdate2 As String
+    Dim matchcountry2 As String
+    Dim matchtournament2 As String
+    'On Error Resume Next
+    
+    If matchdate <> "" Then
+        matchDatestr = "TableLiveScore.EventDateStr = '" & matchdate & "'"
+        matchdate2 = "EventDateStr = '" & matchdate & "'"
+    Else
+        matchDatestr = ""
+        matchdate2 = ""
+    End If
+    
+    If country <> "" Then
+        matchcountrystr = "TableLiveScore.EventCountry = '" & country & "'"
+        matchcountry2 = "EventCountry = '" & country & "'"
+    Else
+        matchcountrystr = ""
+        matchcountry2 = ""
+    End If
+    
+    If tournament <> "" Then
+        matchtournamentstr = "TableLiveScore.EventTournament = '" & tournament & "'"
+        matchtournament2 = "EventTournament = '" & tournament & "'"
+    Else
+        matchtournamentstr = ""
+        matchtournament2 = ""
+    End If
+    
+    condition = ""
+    
+    If matchDatestr <> "" Then
+        condition = condition & " and " & matchDatestr
+        totalcondition = totalcondition & " and " & matchdate2
+    End If
+    
+    If matchcountrystr <> "" Then
+        condition = condition & " and " & matchcountrystr
+        totalcondition = totalcondition & " and " & matchcountry2
+    End If
+    
+    If matchtournamentstr <> "" Then
+        condition = condition & " and " & matchtournamentstr
+        totalcondition = totalcondition & " and " & matchtournament2
+    End If
+    
+    If Left(totalcondition, 4) = " and" Then
+        totalcondition = Mid(totalcondition, 6, 100)
+    End If
+    
+    Debug.Print totalcondition
+    
+    total = DCount("eventid", "tablelivescore", totalcondition)
+    
+    Set ApXL = CreateObject("Excel.Application")
+    With ApXL
+        .Visible = True
+        Set xlWBk = .Workbooks.Add
+    End With
+    Set xlWSh = xlWBk.Worksheets("sheet1")
+    
+    xlWSh.Range("a1") = total
+    
+    For x = 0 To 20
+        xlWSh.Range("a1").offset(0, x * 2 + 1).Value = "U" & (x + 0.5)
+        xlWSh.Range("a1").offset(0, x * 2 + 2).Value = "O" & (x + 0.5)
+    Next
+    
+    For i = 0 To 90
+        'Set rs = CurrentDb.OpenRecordset("select * from table4 where eventtime >= " & i & " and event = 'Goal'")
+        'Set rs = CurrentDb.OpenRecordset("select * from tablelivescoreresult where eventtime >= " & i & " and event = 'Goal'")
+        Set rs = CurrentDb.OpenRecordset("select * from TableLiveScoreResult INNER JOIN TableLiveScore ON TableLiveScore.EventID = TableLiveScoreResult.matchID WHERE TableLiveScoreResult.eventtime >= " & i & " and TableLiveScoreResult.event = 'Goal'" & condition)
+
+        For x = 0 To 20
+            result(x) = 0
+        Next
+        
+        x = 1
+        tm = ""
+        lm = ""
+
+        Do While Not rs.EOF
+            tm = rs.Fields("matchid").Value
+            If tm <> lm Then
+                x = 1
+                result(x) = result(x) + 1
+                lm = tm
+            Else
+                x = x + 1
+                result(x) = result(x) + 1
+            End If
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = Nothing
+        
+        'result(x) = result(x) + 1
+        
+        'Debug.Print total
+        
+            
+        result(0) = total - result(1)
+        
+        'For x = 1 To 19 'accmulate
+        '    For y = x + 1 To 20
+        '        result(x) = result(x) + result(y)
+        '    Next
+        'Next
+        'For x = 1 To 20
+        '    Debug.Print result(x)
+        'Next
+        'count odds
+        'For x = 0 To 20
+            
+        'Next
+        
+        xlWSh.Range("a" & (i + 2)) = i
+
+        
+        For x = 1 To 20 'count odds and fill in sheets
+            'Debug.Print result(x), result(x) / total, 1 - (result(x) / total)
+            Debug.Print result(x) / total
+            If result(x) / total = 0 Then
+                odds = 0
+            Else
+                odds = (1 - result(x) / total) / (result(x) / total)
+            End If
+            
+            xlWSh.Range("a" & (i + 2)).offset(0, (x - 1) * 2 + 1) = 1 + IIf(result(x) = 0, 0, (result(x) / total) / (1 - result(x) / total))
+            xlWSh.Range("a" & (i + 2)).offset(0, (x - 1) * 2 + 2) = 1 + odds
+            'xlWSh.Range("a" & (i + 2)).offset(0, x + 1) = result(x)
+        Next
+
+    Next
+
+    
+
+    Set ApXL = Nothing
+    Set xlWBk = Nothing
+    Set xlWSh = Nothing
+    
+End Sub
+
+Sub starttimerinterval()
+    
+    Form_Form2.TimerInterval = 1000
+    
+
+End Sub
+
+Sub catchdata()
+    
+    Dim x As Long
+    Dim obrowser As WebBrowser
+    Dim ht As HTMLDocument
+    Dim y As Long
+    Dim fH As Integer
+    Dim fA As Integer
+    Dim sH As Integer
+    Dim sA As Integer
+    Dim tH As Integer
+    Dim ta As Integer
+    Dim fuH As Integer
+    Dim fuA As Integer
+    Dim mt As String
+    Dim elem As Object
+    Dim em As String
+    Dim lm As String
+    Dim qno As String
+    'Dim CHNqno As String
+    
+    'On Error Resume Next
+    
+    Set obrowser = Form_Form2.WebBrowser0.Object
+    
+    Set ht = obrowser.Document
+    em = ht.body.innerHTML
+    'CHNqno = DLookup("field1", "table1", "id = 24")
+    'Debug.Print ht.getElementsByClassName("ipe-ScoreGridHeaderLayout_ExtraData")(0).innerText
+    'Debug.Print ht.getElementsByClassName("ipe-ScoreGridCell ipe-ScoreGridCell_TeamName")(1).innerText
+    
+    'Debug.Print ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(6).innerText
+    
+    If ht.getElementsByClassName("ml18-ScoreHeader_AdditionalText")(0) Is Nothing Then
+        ht.getElementsByClassName("lv-ButtonBar_MatchLive lv-ButtonBar_MatchLive-18")(0).Click
+    End If
+    
+    Do While obrowser.ReadyState <> READYSTATE_COMPLETE: DoEvents: Loop
+    
+    Do While ht.getElementsByClassName("ml18-ScoreHeader_AdditionalText")(0) Is Nothing: DoEvents: Loop
+    
+    qno = ht.getElementsByClassName("ml18-ScoreHeader_AdditionalText")(0).innerText
+    mt = ht.getElementsByClassName("ml18-ScoreHeader_Clock")(0).innerText
+    
+    fH = IIf(Asc(ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(0).innerText) = 32, 0, ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(0).innerText)
+    fA = IIf(Asc(ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(1).innerText) = 32, 0, ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(1).innerText)
+    sH = IIf(Asc(ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(2).innerText) = 32, 0, ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(2).innerText)
+    sA = IIf(Asc(ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(3).innerText) = 32, 0, ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(3).innerText)
+    tH = IIf(Asc(ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(4).innerText) = 32, 0, ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(4).innerText)
+    ta = IIf(Asc(ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(5).innerText) = 32, 0, ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(5).innerText)
+    fuH = IIf(Asc(ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(6).innerText) = 32, 0, ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(6).innerText)
+    fuA = IIf(Asc(ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(7).innerText) = 32, 0, ht.getElementsByClassName("ipe-ScoreGridCell_TextClass18 ipe-ScoreGridCell_Text")(7).innerText)
+    
+    Debug.Print qno, mt
+    
+    Debug.Print fH, fA, sH, sA, tH, ta, fuH, fuA
+    
+    Form_Form2.Text18 = fH
+    Form_Form2.Text26 = fA
+    Form_Form2.Text19 = sH
+    Form_Form2.Text27 = sA
+    Form_Form2.Text21 = tH
+    Form_Form2.Text29 = ta
+    Form_Form2.Text22 = fuH
+    Form_Form2.Text30 = fuA
+    
+    If Len(qno) = 2 Then
+        qno = Mid(qno, 2, 1)
+    Else
+        qno = Mid(qno, 3, 1)
+    End If
+    
+    Select Case qno
+        Case "1"
+            Form_Form2.Text2 = mt
+            Form_Form2.Text3 = Form_Form2.com_time & ":00"
+            Form_Form2.Text5 = Form_Form2.com_time & ":00"
+            Form_Form2.Text6 = Form_Form2.com_time & ":00"
+        Case "2"
+            Form_Form2.Text2 = "00:00"
+            Form_Form2.Text3 = mt
+            Form_Form2.Text5 = Form_Form2.com_time & ":00"
+            Form_Form2.Text6 = Form_Form2.com_time & ":00"
+        Case "3"
+            Form_Form2.Text2 = "00:00"
+            Form_Form2.Text3 = "00:00"
+            Form_Form2.Text5 = mt
+            Form_Form2.Text6 = Form_Form2.com_time & ":00"
+        Case "4"
+            Form_Form2.Text2 = "00:00"
+            Form_Form2.Text3 = "00:00"
+            Form_Form2.Text5 = "00:00"
+            Form_Form2.Text6 = mt
+    End Select
+    
+    calculation
+    
+End Sub
+Sub Estimation()
+    
+    Dim title As String
+    Dim q1 As String
+    Dim q2 As String
+    Dim q3 As String
+    Dim q4 As String
+    Dim h1 As String
+    Dim h2 As String
+    Dim total As String
+    Dim aq1 As Double
+    Dim aq2 As Double
+    Dim aq3 As Double
+    Dim aq4 As Double
+    Dim ah1 As Double
+    Dim ah2 As Double
+    Dim atotal As Double
+    
+    title = "AVG P" & vbNewLine & "Estimate P(Q1)" & vbNewLine & "Estimate P(Q2)" & vbNewLine & "Estimate P(H1)" & vbNewLine & "Estimate P(Q3)" & vbNewLine & "Estimate P(Q4)" & vbNewLine & "Estimate P(H2)" & vbNewLine & "Estimate P(Total)"
+    
+    If Form_Form2.Text50 = 0 Then
+        aq1 = 0
+    Else
+        aq1 = Form_Form2.Text34 / Form_Form2.Text50
+    End If
+    
+    If Form_Form2.Text51 = 0 Then
+        aq2 = 0
+    Else
+        aq2 = Form_Form2.Text35 / Form_Form2.Text51
+    End If
+    
+    If Form_Form2.Text52 = 0 Then
+        ah1 = 0
+    Else
+        ah1 = Form_Form2.Text36 / Form_Form2.Text52
+    End If
+    
+    If Form_Form2.Text53 = 0 Then
+        aq3 = 0
+    Else
+        aq3 = Form_Form2.Text37 / Form_Form2.Text53
+    End If
+
+    If Form_Form2.Text54 = 0 Then
+        aq4 = 0
+    Else
+        aq4 = Form_Form2.Text38 / Form_Form2.Text54
+    End If
+    
+    If Form_Form2.Text55 = 0 Then
+        ah2 = 0
+    Else
+        ah2 = Form_Form2.Text39 / Form_Form2.Text55
+    End If
+    
+    If Form_Form2.Text56 = 0 Then
+        atotal = 0
+    Else
+        atotal = Form_Form2.Text40 / Form_Form2.Text56
+    End If
+    
+    'aq1 = CDbl(Form_Form2.Text34 / Form_Form2.Text50)
+    'aq2 = CDbl(Form_Form2.Text35 / Form_Form2.Text51)
+    'ah1 = CDbl(Form_Form2.Text36 / Form_Form2.Text52)
+
+    
+    'aq3 = IIf(Form_Form2.Text53 = 0, 0, Form_Form2.Text37 / Form_Form2.Text53)
+    'aq4 = CDbl(Form_Form2.Text38 / Form_Form2.Text54)
+    'ah2 = CDbl(Form_Form2.Text39 / Form_Form2.Text55)
+    'atotal = CDbl(Form_Form2.Text40 / Form_Form2.Text56)
+    
+    q1 = Format(aq1, "#.###") & vbNewLine & Format(aq1 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 60 * Form_Form2.com_time, "###.#")
+    q2 = Format(aq2, "#.###") & vbNewLine & Format(aq1 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 60 * Form_Form2.com_time, "###.#")
+    h1 = Format(ah1, "#.###") & vbNewLine & Format(aq1 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 120 * Form_Form2.com_time, "###.#")
+    q3 = Format(aq3, "#.###") & vbNewLine & Format(aq1 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 60 * Form_Form2.com_time, "###.#")
+    q4 = Format(aq4, "#.###") & vbNewLine & Format(aq1 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 60 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 60 * Form_Form2.com_time, "###.#")
+    h2 = Format(ah2, "#.###") & vbNewLine & Format(aq1 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 120 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 120 * Form_Form2.com_time, "###.#")
+    total = Format(atotal, "#.###") & vbNewLine & Format(aq1 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 240 * Form_Form2.com_time, "###.#")
+
+    If Form_Form2.Text10 = 0 Then
+        total = Format(atotal, "#.###") & vbNewLine & Format(aq1 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(0, "##.#")
+    ElseIf Form_Form2.Text11 = 0 Then
+        total = Format(atotal, "#.###") & vbNewLine & Format(aq1 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq2 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah1 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq3 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq4 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(ah2 * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(atotal * 240 * Form_Form2.com_time, "###.#") & vbNewLine & Format(aq1 * 240 * Form_Form2.com_time, "###.#")
+    ElseIf Form_Form2.Text11 = 0 Then
+    
+    End If
+    
+    Form_Form2.txt_title = title
+    Form_Form2.txt_q1 = q1
+    Form_Form2.txt_q2 = q2
+    Form_Form2.txt_h1 = h1
+    Form_Form2.txt_q3 = q3
+    Form_Form2.txt_q4 = q4
+    Form_Form2.txt_h2 = h2
+    Form_Form2.Txt_total = total
+End Sub
+
+Sub calculation()
+
+    Dim s As Integer
+    
+    Form_Form2.Text10 = ct(Form_Form2.Text2)
+    Form_Form2.Text11 = ct(Form_Form2.Text3)
+    Form_Form2.Text12 = Form_Form2.Text10 + Form_Form2.Text11
+    Form_Form2.Text13 = ct(Form_Form2.Text5)
+    Form_Form2.Text14 = ct(Form_Form2.Text6)
+    Form_Form2.Text15 = Form_Form2.Text13 + Form_Form2.Text14
+    Form_Form2.Text16 = Form_Form2.Text12 + Form_Form2.Text15
+
+    Form_Form2.Text20 = Form_Form2.Text18 + Form_Form2.Text19
+    Form_Form2.Text28 = Form_Form2.Text26 + Form_Form2.Text27
+    Form_Form2.Text23 = Form_Form2.Text21 + Form_Form2.Text22
+    Form_Form2.Text31 = Form_Form2.Text30 + Form_Form2.Text29
+    
+    Form_Form2.Text32 = Form_Form2.Text31 + Form_Form2.Text28
+    Form_Form2.Text24 = Form_Form2.Text23 + Form_Form2.Text20
+    
+    Form_Form2.Text34 = Form_Form2.Text18 + Form_Form2.Text26
+    Form_Form2.Text35 = Form_Form2.Text19 + Form_Form2.Text27
+    Form_Form2.Text36 = Form_Form2.Text20 + Form_Form2.Text28
+    Form_Form2.Text37 = Form_Form2.Text21 + Form_Form2.Text29
+    Form_Form2.Text38 = Form_Form2.Text22 + Form_Form2.Text30
+    Form_Form2.Text39 = Form_Form2.Text23 + Form_Form2.Text31
+    Form_Form2.Text40 = Form_Form2.Text24 + Form_Form2.Text32
+    
+    Form_Form2.Text42 = Form_Form2.Text18 - Form_Form2.Text26
+    Form_Form2.Text43 = Form_Form2.Text19 - Form_Form2.Text27
+    Form_Form2.Text44 = Form_Form2.Text20 - Form_Form2.Text28
+    Form_Form2.Text45 = Form_Form2.Text21 - Form_Form2.Text29
+    Form_Form2.Text46 = Form_Form2.Text22 - Form_Form2.Text30
+    Form_Form2.Text47 = Form_Form2.Text23 - Form_Form2.Text31
+    Form_Form2.Text48 = Form_Form2.Text24 - Form_Form2.Text32
+    
+    Form_Form2.Text50 = Form_Form2.com_time * 60 - Form_Form2.Text10
+    Form_Form2.Text51 = Form_Form2.com_time * 60 - Form_Form2.Text11
+    Form_Form2.Text52 = Form_Form2.com_time * 60 * 2 - Form_Form2.Text12
+    Form_Form2.Text53 = Form_Form2.com_time * 60 - Form_Form2.Text13
+    Form_Form2.Text54 = Form_Form2.com_time * 60 - Form_Form2.Text14
+    Form_Form2.Text55 = Form_Form2.com_time * 60 * 2 - Form_Form2.Text15
+    Form_Form2.Text56 = Form_Form2.com_time * 60 * 4 - Form_Form2.Text16
+    
+    'Form_Form2.Text74 = Form_Form2.Text34 / Form_Form2.Text50
+    'Form_Form2.Text75 = Form_Form2.Text35 / Form_Form2.Text51
+    'Form_Form2.Text76 = Form_Form2.Text36 / Form_Form2.Text52
+    'Form_Form2.Text77 = Form_Form2.Text37 / Form_Form2.Text53
+    'Form_Form2.Text78 = Form_Form2.Text38 / Form_Form2.Text54
+    'Form_Form2.Text79 = Form_Form2.Text39 / Form_Form2.Text55
+    'Form_Form2.Text80 = Form_Form2.Text40 / Form_Form2.Text56
+    
+    'Form_Form2.Text98 = Form_Form2.com_time * 60 * Form_Form2.Text74
+    'Form_Form2.Text99 = Form_Form2.com_time * 60 * Form_Form2.Text75
+    'Form_Form2.Text100 = Form_Form2.com_time * 60 * 2 * Form_Form2.Text76
+    'Form_Form2.Text101 = Form_Form2.com_time * 60 * Form_Form2.Text77
+    'Form_Form2.Text102 = Form_Form2.com_time * 60 * Form_Form2.Text78
+    'Form_Form2.Text103 = Form_Form2.com_time * 60 * 2 * Form_Form2.Text79
+    'Form_Form2.Text104 = Form_Form2.com_time * 60 * 4 * Form_Form2.Text80
+    
+    Estimation
+End Sub
+
+Function ct(mt As String) As Integer
+
+    ct = CInt(Left(mt, 2)) * 60 + CInt(Mid(mt, 4, 2))
+    
+End Function
+
+
