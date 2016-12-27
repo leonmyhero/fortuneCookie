@@ -1,0 +1,87 @@
+Option Compare Database
+
+Private Sub btn_date_Click()
+    Call CatchBasketballmatch(Me.txt_date)
+    
+End Sub
+
+Private Sub Command14_Click()
+    
+    Dim rs As Recordset
+    Dim rst As Recordset
+    Dim x As Integer
+    Dim result(0 To 20) As Long
+    Dim total As Long
+    Dim tm As String
+    Dim lm As String
+    Dim report As String
+    Dim per As Double
+    Dim sheetname As Integer
+    Dim ApXL As Object
+    Dim xlWBk As Object
+    Dim xlWSh As Object
+    
+    total = DCount("matchid", "table5")
+    
+    Set ApXL = CreateObject("Excel.Application")
+    With ApXL
+        .Visible = True
+        Set xlWBk = .Workbooks.Add
+    End With
+    Set xlWSh = xlWBk.Worksheets("sheet1")
+    For x = 0 To 20
+        xlWSh.Range("a1").offset(0, x + 1).Value = x
+    Next
+    
+        Set rs = CurrentDb.OpenRecordset("select * from table4 where eventtime >= " & Me.txt_eventtime & " and event = '" & Me.com_type & "'")
+        x = 1
+        tm = ""
+        lm = ""
+        
+        Do While Not rs.EOF
+            tm = rs.Fields("matchid").Value
+            If tm <> lm Then
+                result(x) = result(x) + 1
+                x = 1
+                lm = tm
+            Else
+                x = x + 1
+            End If
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = Nothing
+        
+        result(x) = result(x) + 1
+        
+        'Debug.Print total
+        report = ""
+        For x = 1 To 20
+            'Debug.Print x, result(x)
+            'report = report & x & "     " & result(x) & "      "
+            result(0) = result(0) + result(x)
+        Next
+        
+    
+            
+        result(0) = total - result(0)
+        'report = Me.txt_eventtime & "           "
+        xlWSh.Range("a2") = Me.txt_eventtime
+        'For x = 0 To 20
+            'per = Format(result(x) / total, "##.#%")
+        '    report = report & result(x) & "   "
+        'Next
+        'report = report & vbNewLine
+        
+        For x = 0 To 20
+            xlWSh.Range("a2").offset(0, x + 1) = Format(result(x) / total, "##.#######")
+        Next
+        
+
+    
+
+    Set ApXL = Nothing
+    Set xlWBk = Nothing
+    Set xlWSh = Nothing
+    
+End Sub
