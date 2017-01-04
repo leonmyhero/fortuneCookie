@@ -1,0 +1,154 @@
+Type SportsTD
+
+    hteam As String
+    ateam As String
+    fscore As String
+    hscore As String
+    matchtime As String
+    tournament As String
+    hfscore As Integer
+    afscore As Integer
+    hhscore As Integer
+    ahscore As Integer
+    
+End Type
+
+Private Sub btn_changeUrl_Click()
+    
+    Dim url As String
+    Dim yy As Integer
+    Dim mm As Integer
+    Dim dd As Integer
+    Dim selectdate As Date
+    Dim obrowser As WebBrowser
+    
+    url = "http://freelive.7m.cn/result.aspx?mark=en&dates=2017-01-02&TimeZone=%2B0000&wordAd=&wadurl=http://www.7m.cn&width=700&cpageBgColor=FFFFFF&tableFontSize=12&cborderColor=DDDDDD&ctdColor1=FFFFFF&ctdColor2=E0E9F6&clinkColor=0044DD&cdateFontColor=333333&cdateBgColor=FFFFFF&scoreFontSize=12&cteamFontColor=000000&cgoalFontColor=FF0000&cgoalBgColor=FFFFE1&cremarkFontColor=0000FF&cremarkBgColor=F7F8F3&Skins=10&teamWeight=400&scoreWeight=700&goalWeight=400&fontWeight=700&DSTbox=&ordType=&view=simplify"
+    
+    selectdate = Me.txt_date
+    
+    Debug.Print Format(selectdate, "yyyy-mm-dd")
+    
+    url = "http://freelive.7m.cn/result.aspx?mark=en&dates=" & Format(selectdate, "yyyy-mm-dd") & "&TimeZone=%2B0000&wordAd=&wadurl=http://www.7m.cn&width=700&cpageBgColor=FFFFFF&tableFontSize=12&cborderColor=DDDDDD&ctdColor1=FFFFFF&ctdColor2=E0E9F6&clinkColor=0044DD&cdateFontColor=333333&cdateBgColor=FFFFFF&scoreFontSize=12&cteamFontColor=000000&cgoalFontColor=FF0000&cgoalBgColor=FFFFE1&cremarkFontColor=0000FF&cremarkBgColor=F7F8F3&Skins=10&teamWeight=400&scoreWeight=700&goalWeight=400&fontWeight=700&DSTbox=&ordType=&view=simplify"
+    
+    Set obrowser = Me.WebBrowser0.Object
+    obrowser.Navigate url
+    
+End Sub
+
+Private Sub btn_fetchdata_Click()
+
+    Call FetchSportsTD(Me.txt_date)
+    
+End Sub
+
+
+Sub FetchSportsTD(matchdate As Date)
+
+    Dim rs As Recordset
+    Dim obrowser As WebBrowser
+    Dim hteam As String
+    Dim ateam As String
+    Dim fscore As String
+    Dim hscore As String
+    Dim matchtime As String
+    'Dim matchdate As Date
+    Dim tournament As String
+    Dim hfscore As Integer
+    Dim afscore As Integer
+    Dim hhscore As Integer
+    Dim ahscore As Integer
+    Dim fd() As SportsTD
+    Dim ht As HTMLDocument
+    Dim em As HTMLDDElement
+    Dim tr As HTMLDDElement
+    Dim td As HTMLDDElement
+    Dim startposition As Long
+    Dim endposition As Long
+    Dim eventdate As String
+    Dim i As Integer
+    Dim x As Integer
+    
+    Set obrowser = Form_FormSportsDT.WebBrowser0.Object
+    Set ht = obrowser.Document
+    
+    'matchdate = Me.txt_date
+    
+    startposition = 0
+    endposition = 50000
+    
+    i = ht.getElementsByClassName("date").length
+    Debug.Print i
+    endposition = ht.getElementsByClassName("date")(i - 1).offsetTop
+    Debug.Print startposition, endposition
+    
+    For Each em In ht.getElementsByClassName("date")
+        If em.innerText <> "" Then
+            eventdate = Left(em.innerText, 10)
+            
+            If IsDate(eventdate) Then
+                'Debug.Print eventdate
+                If eventdate = Format(matchdate, "dd/mm/yyyy") Then
+                    startposition = em.offsetTop
+                End If
+                If CDate(eventdate) > matchdate Then
+                    endposition = em.offsetTop
+                End If
+            End If
+        End If
+    Next
+    
+    If endposition = 0 Then
+        endposition = 5000
+    End If
+    
+    i = 0
+    For Each em In ht.getElementsByTagName("tr")
+        If em.offsetTop > startposition And em.offsetTop < endposition Then
+            If em.className = "tbg0" Or em.className = "tbg1" Then
+                ReDim Preserve fd(0 To i)
+                fd(i).tournament = em.getElementsByTagName("td")(0).innerText
+                fd(i).matchtime = em.getElementsByTagName("td")(1).innerText
+                fd(i).hteam = em.getElementsByTagName("td")(2).getElementsByTagName("a")(0).innerText
+                fd(i).ateam = em.getElementsByTagName("td")(4).getElementsByTagName("a")(0).innerText
+                fd(i).fscore = em.getElementsByTagName("td")(3).innerText
+                fd(i).hscore = em.getElementsByTagName("td")(5).innerText
+                x = InStr(1, fd(i).fscore, "-", vbTextCompare)
+                If x > 0 Then
+                    fd(i).hfscore = Left(fd(i).fscore, x - 1)
+                    fd(i).afscore = Mid(fd(i).fscore, x + 1, 2)
+                End If
+                x = InStr(1, fd(i).hscore, "-", vbTextCompare)
+                If x > 0 Then
+                    fd(i).hhscore = Left(fd(i).hscore, x - 1)
+                    fd(i).ahscore = Mid(fd(i).hscore, x + 1, 2)
+                End If
+                i = i + 1
+            End If
+        End If
+    Next
+    
+    Set rs = CurrentDb.OpenRecordset("select * from TableSportsDT where matchdateStr = '" & matchdate & "'")
+    For x = 0 To UBound(fd)
+        With rs
+        .AddNew
+        ![matchdate] = matchdate
+        ![matchDatestr] = matchdate
+        ![matchname] = fd(x).hteam & " v " & fd(x).ateam
+        ![hteam] = fd(x).hteam
+        ![ateam] = fd(x).ateam
+        ![matchtime] = fd(x).matchtime
+        ![tournament] = fd(x).tournament
+        ![fullresult] = fd(x).fscore
+        ![halfresult] = fd(x).hscore
+        ![hfscore] = fd(x).hfscore
+        ![afscore] = fd(x).afscore
+        ![hhscore] = fd(x).hhscore
+        ![ahscore] = fd(x).ahscore
+        .Update
+        End With
+    Next
+    
+    rs.Close
+    Set rs = Nothing
+    
+End Sub
