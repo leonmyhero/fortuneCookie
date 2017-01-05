@@ -1,0 +1,49 @@
+Sub readfile(matchdate As Date)
+
+    Dim fileName As String, textData As String, textRow As String, fileNo As Integer
+    Dim st As Variant
+    Dim x As Integer
+    Dim rs As Recordset
+    Dim hteam As String
+    Dim ateam As String
+    
+    fileName = "C:\Users\leonmyhero\PycharmProjects\untitled\betfair.txt"
+    fileNo = FreeFile 'Get first free file number
+    
+    Set rs = CurrentDb.OpenRecordset("select * from TableBetfair where matchdatestr = '" & matchdate & "'")
+        
+    Open fileName For Input As #fileNo
+    Do While Not EOF(fileNo)
+       Line Input #fileNo, textRow
+       Debug.Print textRow
+       st = Split(textRow, ",", , vbTextCompare)
+       x = InStr(1, st(0), " v ", vbTextCompare)
+       
+        hteam = Left(st(0), x - 1)
+        ateam = Mid(st(0), x + 3, 20)
+        Debug.Print Val(st(1)), Val(st(2))
+        With rs
+        .AddNew
+        ![matchdate] = matchdate
+        ![matchDatestr] = matchdate
+        ![matchname] = st(0)
+        ![hteam] = hteam
+        ![ateam] = ateam
+        ![odd15] = Val(st(1))
+        ![odd05] = Val(st(2))
+        ![matchurl] = st(3)
+        ![country] = st(4)
+        ![tournament] = st(5)
+        .Update
+        End With
+       
+       'textData = textData & textRow
+       'Debug.Print textData
+    Loop
+    Close #fileNo
+    
+    rs.Close
+    Set rs = Nothing
+
+End Sub
+
