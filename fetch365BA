@@ -1,0 +1,126 @@
+Sub fetch365BasketballMarket()
+    
+    Dim rs As Recordset
+    Dim obrowser As WebBrowser
+    Dim ht As HTMLDocument
+    Dim em As HTMLLIElement
+    Dim en As HTMLLIElement
+    Dim ea As HTMLLIElement
+    Dim x As Integer
+    Dim i As Integer
+    Dim matchDateStr As String
+    Dim hteam() As String
+    Dim ateam() As String
+    Dim y As Integer
+    Dim title As String
+    Dim market As String
+    Dim Points As Single
+    Dim ods As Single
+    
+    Set obrowser = Form_Form2.WebBrowser0.Object
+    Set ht = obrowser.Document
+    
+    Set em = ht.getElementsByClassName("sl-MarketCouponValuesExplicit13 gl-Market_General gl-Market_HasLabels ")(0)
+    x = 0
+    y = 0
+    For Each en In em.getElementsByTagName("div")
+        If en.className = "gl-MarketColumnHeader sl-MarketHeaderLabel sl-MarketHeaderLabel_Date " Then
+            matchDateStr = en.innerText
+            Debug.Print matchDateStr
+        End If
+        If en.className = "sl-CouponParticipantGameLineTwoWay_NameText " Then
+            ReDim Preserve hteam(0 To y)
+            ReDim Preserve ateam(0 To y)
+
+            If x Mod 2 = 0 Then
+                hteam(y) = en.innerText
+            Else
+                ateam(y) = en.innerText
+                y = y + 1
+            End If
+            'Debug.Print en.innerText
+            x = x + 1
+        End If
+    Next
+    
+    For x = 0 To UBound(hteam)
+        Debug.Print hteam(x), ateam(x)
+    Next
+    
+    'For Each en In ht.getElementsByClassName("sl-CouponFixtureLinkParticipant_Name ")
+    '    Debug.Print en.innerHTML
+    'Next
+    'For x = 0 To UBound(hteam)
+        ht.getElementsByClassName("sl-CouponFixtureLinkParticipant_Name ")(0).Click
+        Pause
+        Pause
+        Do While ht.ReadyState <> "complete": DoEvents: Loop
+        Pause
+        Pause
+        Pause
+        Pause
+        For Each em In ht.getElementsByClassName("gl-MarketGroup ")
+            'For Each ea In em.getElementsByTagName("div")
+            If Len(em.innerText) < 40 Then
+                em.Click
+            End If
+        Next
+        matchDateStr = ht.getElementsByClassName("cm-MarketGroupExtraData_TimeStamp ")(0).innerText
+        For Each en In ht.getElementsByClassName("gl-MarketGroup ")
+            If en.getElementsByTagName("span")(0).innerText = "Game Lines" Then
+                
+            End If
+            If en.innerText = "Spread" Then
+            
+            End If
+            
+            'Debug.Print en.innerText
+        Next
+        Pause
+        Pause
+        Pause
+        Pause
+        Pause
+        Pause
+        ht.getElementsByClassName("cl-BreadcrumbTrail_Breadcrumb ")(1).Click
+        Pause
+        Pause
+        Pause
+        Pause
+    'Next
+    
+    'ht.getElementsByClassName("cl-BreadcrumbTrail_BackButton ").Click
+    
+'    Set rs = CurrentDb.OpenRecordset("select * from TableBasketballData")
+'
+'    Do While Not rs.EOF
+'    With rs
+'        .Edit
+'        ![Vendor] = "betfair"
+'        ![tournament] = "NBA"
+'        .Update
+'    End With
+'
+'    rs.MoveNext
+'    Loop
+'
+'    rs.Close
+'    Set rs = Nothing
+    
+    
+End Sub
+
+MatchDateStr
+matchdate
+hteam
+ateam
+title
+market
+points
+odds
+score
+margin
+result
+vendor
+country
+tournament
