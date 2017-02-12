@@ -13,6 +13,7 @@ class betfair:
         self.indexurl2 = "&goingInPlay=false"
         self.matchNames = []
         self.matchUrls = []
+        self.matchList = []
         self.match15Odds = []
         self.match05Odds = []
         self.match25Odds = []
@@ -29,6 +30,7 @@ class betfair:
         driver = webdriver.Chrome()
         driver.get(url)
         return driver.page_source
+        driver.close()
 
     def GetAllOdds(self, url):
         driver = webdriver.Chrome()
@@ -67,13 +69,13 @@ class betfair:
                     except IndexError:
                         full.append(1)
 
-                #co = soup.find_all("div", {"class": "other-markets-tab-content ng-scope"})[0]
-                #x=0
-                #for se in soup.find_all("span", {"class": "market-name-label ng-binding"}):
-                    #co = se.find_all("span", {"class": "market-name-label ng-binding"})[0]
-                #    print (se.text)
-                 #   print (soup.find_all("button", {"class": "mv-bet-button ng-isolate-scope back-button back-selection-button empty"})[x].text)
-                  #  x = x+1
+                        #co = soup.find_all("div", {"class": "other-markets-tab-content ng-scope"})[0]
+                        #x=0
+                        #for se in soup.find_all("span", {"class": "market-name-label ng-binding"}):
+                        #co = se.find_all("span", {"class": "market-name-label ng-binding"})[0]
+                        #    print (se.text)
+                        #   print (soup.find_all("button", {"class": "mv-bet-button ng-isolate-scope back-button back-selection-button empty"})[x].text)
+                        #  x = x+1
                 for tab in soup.find_all("div", {"id": "mini-marketview-mod"}):
                     #print (tab.text)
                     #print (tab.find_all("span", {"class": "market-name-label ng-binding"})[0].text)
@@ -95,16 +97,16 @@ class betfair:
                 #print (str(UO15[0]) + " " + str(UO15[1]))
                 self.SaveDatatoMysql(eventtime, matchname, country, tournament, full[0], full[1], full[2], UO05[1], UO05[0], UO15[1], UO15[0], UO25[1], UO25[0], UO35[1], UO35[0], HUO05[1], HUO05[0])
                 print(str(eventtime)+", "+matchname+", "+country+", "+tournament+", "+str(full[0])+", "+str(full[1])+", "+str(full[2])+", "+str(UO05[0])+", "+str(UO05[1])+", "+str(UO15[0])+", "+str(UO15[1])+", "+str(UO25[0])+", "+str(UO25[1])+", "+str(UO35[0])+", "+str(UO35[1])+", "+str(HUO05[0])+", "+str(HUO05[1]))
-                    #print(tab.find_all("div", {"class": "default name ng-scope"})[0].text + tab.find_all("div", {"class": "default name ng-scope"})[1].text)
-                    #print(tab.find_all("span", {"class": "bet-button-price"})[0].text + tab.find_all("span", {"class": "bet-button-price"})[2].text)
+                #print(tab.find_all("div", {"class": "default name ng-scope"})[0].text + tab.find_all("div", {"class": "default name ng-scope"})[1].text)
+                #print(tab.find_all("span", {"class": "bet-button-price"})[0].text + tab.find_all("span", {"class": "bet-button-price"})[2].text)
                 #x = 0
                 #for se in soup.find_all("tr", {"class": "mini-mv-runner-line ng-scope active-runner"}):
                 #    print (se.text)
-                    #for o in se.find_all("button"):
+                #for o in se.find_all("button"):
                 #    print (se.find_all("div", {"class": "default name ng-scope"})[0].text)
                 #    print (se.find_all("span", {"class": "bet-button-price"})[0].text)
-                    #x = x +1
-                    #print ("price" + se.find("button").text)
+                #x = x +1
+                #print ("price" + se.find("button").text)
 
                 #if soup.find_all("button", {"class": "back mv-bet-button ng-isolate-scope back-button back-selection-button"})[1]:
                 #try:
@@ -143,6 +145,7 @@ class betfair:
             #    print(result)
         finally:
             connection.close()
+
     def GetAllMatchNameUrl(self, html):
         soup = BeautifulSoup(str(html), 'html.parser')
         for match in soup.find_all("td",{"class":"name"}):
@@ -153,15 +156,30 @@ class betfair:
             url = match.find("a")['href']
             self.matchNames.append(matchName)
             self.matchUrls.append(url)
+        for tr in soup.find_all("tr", {"class": "inplaynow"}):
+            home = tr.find("span", {"class": "home-team"}).text
+            away = tr.find("span", {"class": "away-team"}).text
+            period = tr.find("span", {"class": "dtstart time"}).text.replace('\n', '')
+            result = tr.find("span", {"class": "inplaynow-score"}).text.replace('\n','')
+            matchdetail = []
+            if result.find(" - ") != -1:
+                hscore = int(result[:result.find(" v ")-2])
+                ascore = int(result[result.find(" v ") + 5:])
+                print(home + " " + tr.find("span", {"class": "inplaynow-score"}).text.replace('\n','') + " " + away + " " + period + " " + str(hscore) + " " + str(ascore))
+                matchdetail.append(home)
+                matchdetail.append(away)
+                matchdetail.append(hscore)
+                matchdetail.append(ascore)
+                print (matchdetail)
         #for odd in soup.find_all("td", {"class":"odds back selection-2"}):
         #    o = odd.text.replace('\n','')
         #    o = o.replace(' ','')
         #    self.match15Odds.append(o)
-        if soup.find("a", {"class":"next-page"}):
-            self.findNextPage = True
-            self.nextPage = soup.find("a", {"class":"next-page"})['href']
-        else:
-            self.findNextPage = False
+        #if soup.find("a", {"class":"next-page"}):
+        #     self.findNextPage = True
+        #     self.nextPage = soup.find("a", {"class":"next-page"})['href']
+        # else:
+        #     self.findNextPage = False
             #print(self.nextPage)
 
     def Get25ODDs(self, html):
@@ -181,48 +199,39 @@ class betfair:
         #shtml = self.GetHtml(self.indexurl2)
         #self.Get25ODDs(shtml)
         today = dt.today()
-        tomorrow = today + timedelta(days=1)
-        dayid = tomorrow.toordinal()%7 + 1
+        #tomorrow = today + timedelta(days=1)
+        dayid = today.toordinal()%7 + 1
         surl = self.indexurl1 + str(dayid) + self.indexurl2
         print (surl)
         shtml = self.GetHtml(surl)
         self.GetAllMatchNameUrl(shtml)
-        #f = open('betfair.csv', 'w')
-        d = open('betfair0110.txt', 'w')
-        #writer = csv.writer(f, delimiter='	', quotechar='"', quoting=csv.QUOTE_ALL)
-        while True:
-            shtml = self.GetHtml("https://www.betfair.com" + self.nextPage)
-            self.GetAllMatchNameUrl(shtml)
-            print(self.findNextPage)
-            print (self.nextPage)
-            if self.findNextPage == False:
-                break
 
-        i = 0
-
-        self.year = dt.now().year
-
-        for url in self.matchUrls:
-            ourl = "https://www.betfair.com" + url
-            print (self.matchNames[i] + " " + ourl)
-            i += 1
-
-        i = 0
-        for url in self.matchUrls:
-            ourl = "https://www.betfair.com" + url
-            #print (ourl)
-            try:
-                self.GetAllOdds(ourl)
-                #self.match05Odds.append(odd)
-                #print (self.matchNames[i] + "," + self.match25Odds[i] + "," + self.match15Odds[i] + "," + self.match05Odds[i] + ',' + url + ',' + self.country[i] + ',' + self.tournament[i])
-                #writer.writerow(self.matchNames[i] + ',' + self.match15Odds[i] + ',' + self.match05Odds[i] + ',' + url + ',' + self.country[i] + ',' + self.tournament[i])
-                #d.write(self.matchNames[i] + "," + self.match25Odds[i] + "," + self.match15Odds[i] + "," + self.match05Odds[i] + ',' + url + ',' + self.country[i] + ',' + self.tournament[i] + '\n')
-                #i = i + 1
-            except IndexError:
-                continue
-        d.close()
-        #f.close()
-
+        # d = open('betfair0110.txt', 'w')
+        # while True:
+        #     shtml = self.GetHtml("https://www.betfair.com" + self.nextPage)
+        #     self.GetAllMatchNameUrl(shtml)
+        #     print(self.findNextPage)
+        #     print (self.nextPage)
+        #     if self.findNextPage == False:
+        #         break
+        #
+        # i = 0
+        #
+        # self.year = dt.now().year
+        #
+        # for url in self.matchUrls:
+        #     ourl = "https://www.betfair.com" + url
+        #     print (self.matchNames[i] + " " + ourl)
+        #     i += 1
+    # i = 0
+    # for url in self.matchUrls:
+    #     ourl = "https://www.betfair.com" + url
+    #     #print (ourl)
+    #     try:
+    #         self.GetAllOdds(ourl)
+    #     except IndexError:
+    #         continue
+    # d.close()
 
 if __name__ == '__main__':
     betfair = betfair()
