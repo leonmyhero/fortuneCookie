@@ -10,7 +10,7 @@ class betfair:
     def __init__(self):
         #self.indexurl = "https://www.betfair.com/exchange/football/coupon?id=4&goingInPlay=false&fdcPage=1&markettype=OVER_UNDER_15"
         self.indexurl1 = "https://www.betfair.com/exchange/football/coupon?id="
-        self.indexurl2 = "&goingInPlay=false"
+        self.indexurl2 = "&goingInPlay=true"
         self.matchNames = []
         self.matchUrls = []
         self.matchList = []
@@ -148,29 +148,43 @@ class betfair:
 
     def GetAllMatchNameUrl(self, html):
         soup = BeautifulSoup(str(html), 'html.parser')
-        for match in soup.find_all("td",{"class":"name"}):
-            #self.matchNames.append(match.text)
-            m = match.find("a")
-            matchName = m.find_all("span")[0].text + ' v ' + m.find_all('span')[5].text
-            #matchName = match.find("a").text
-            url = match.find("a")['href']
-            self.matchNames.append(matchName)
-            self.matchUrls.append(url)
-        for tr in soup.find_all("tr", {"class": "inplaynow"}):
-            home = tr.find("span", {"class": "home-team"}).text
-            away = tr.find("span", {"class": "away-team"}).text
-            period = tr.find("span", {"class": "dtstart time"}).text.replace('\n', '')
-            result = tr.find("span", {"class": "inplaynow-score"}).text.replace('\n','')
-            matchdetail = []
-            if result.find(" - ") != -1:
-                hscore = int(result[:result.find(" v ")-2])
-                ascore = int(result[result.find(" v ") + 5:])
-                print(home + " " + tr.find("span", {"class": "inplaynow-score"}).text.replace('\n','') + " " + away + " " + period + " " + str(hscore) + " " + str(ascore))
-                matchdetail.append(home)
-                matchdetail.append(away)
-                matchdetail.append(hscore)
-                matchdetail.append(ascore)
-                print (matchdetail)
+        for tbody in soup.find_all("tbody", {"class":"vevent"}):
+            #print (tbody.attrs["data-marketid"])
+            marketid = tbody.attrs["data-marketid"]
+            eventid = tbody.attrs["data-eventid"]
+        # for match in soup.find_all("td",{"class":"name"}):
+        #     #self.matchNames.append(match.text)
+        #     m = match.find("a")
+        #     matchName = m.find_all("span")[0].text + ' v ' + m.find_all('span')[5].text
+        #     #matchName = match.find("a").text
+        #     url = match.find("a")['href']
+        #     self.matchNames.append(matchName)
+        #     self.matchUrls.append(url)
+            for tr in tbody.find_all("tr", {"class": "inplaynow"}):
+                home = tr.find("span", {"class": "home-team"}).text
+                away = tr.find("span", {"class": "away-team"}).text
+                period = tr.find("span", {"class": "dtstart time"}).text.replace('\n', '')
+                result = tr.find("span", {"class": "inplaynow-score"}).text.replace('\n','')
+                matchdetail = []
+                if result.find(" - ") != -1:
+                    hscore = int(result[:result.find(" v ")-2])
+                    ascore = int(result[result.find(" v ") + 5:])
+                    if period.find("'") != -1:
+                        print (period[:period.find("'")-1])
+                        matchtime = int(period[:period.find("'")-1])
+                    elif period == "HT":
+                        matchtime = 45
+                    else:
+                        matchtime = 90
+                    #print(home + " " + tr.find("span", {"class": "inplaynow-score"}).text.replace('\n','') + " " + away + " " + period + " " + str(hscore) + " " + str(ascore))
+                    matchdetail.append(marketid)
+                    matchdetail.append(eventid)
+                    matchdetail.append(home)
+                    matchdetail.append(away)
+                    matchdetail.append(hscore)
+                    matchdetail.append(ascore)
+                    matchdetail.append(matchtime)
+                    print (matchdetail)
         #for odd in soup.find_all("td", {"class":"odds back selection-2"}):
         #    o = odd.text.replace('\n','')
         #    o = o.replace(' ','')
